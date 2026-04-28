@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   tf
+  serial
 )
 
 ## System dependencies are found with CMake's conventions
@@ -119,11 +120,11 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
   ${catkin_INCLUDE_DIRS}
 )
 
-## Declare a C++ library
+add_executable(stm32_bridge src/stm32_bridge.cpp)
+target_link_libraries(stm32_bridge ${catkin_LIBRARIES})
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/robot_bringup.cpp
 # )

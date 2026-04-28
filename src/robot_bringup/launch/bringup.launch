@@ -1,0 +1,25 @@
+<launch>
+    <!-- V4架构总入口：Cartographer 统一方案 -->
+
+    <!-- 1. 底层通讯：仅提供 /odom_raw -->
+    <include file="$(find robot_bringup)/launch/stm32.launch" />
+
+    <!-- 2. 传感器驱动：激光雷达 -->
+    <include file="$(find lidar)/launch/lidar.launch" />
+
+    <!-- 3. 静态 TF：base_link -> laser -->
+    <!-- 注意：根据实际安装位置修改参数，这里假设雷达在中心上方10cm -->
+    <node pkg="tf" type="static_transform_publisher" name="base_to_laser" args="0.1 0 0.1 0 0 0 base_link laser 100" />
+
+    <!-- 4. SLAM 与 定位 (后续需配置 lua 文件) -->
+    <!-- 
+    <node name="cartographer_node" pkg="cartographer_ros"
+        type="cartographer_node" args="
+            -configuration_directory $(find robot_bringup)/config
+            -configuration_basename mapping.lua"
+        output="screen">
+        <remap from="odom" to="odom_raw" />
+    </node>
+    -->
+
+</launch>

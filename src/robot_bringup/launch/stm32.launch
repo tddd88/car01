@@ -1,0 +1,9 @@
+<launch>
+    <!-- 启动底层串口通讯桥接节点 -->
+    <node pkg="robot_bringup" type="stm32_bridge" name="stm32_bridge" output="screen">
+        <param name="port_name" value="/dev/ttyUSB0" type="string" />
+        <param name="baud_rate" value="115200" type="int" />
+        <!-- V3架构: 将里程计TF推算权转移给 EKF 节点与 rf2o 融合，这里必须为 false 避免 TF 树冲突树干断裂！ -->
+        <param name="publish_tf" value="false" type="bool" />
+    </node>
+</launch>
