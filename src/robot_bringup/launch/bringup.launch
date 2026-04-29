@@ -5,11 +5,16 @@
     <include file="$(find robot_bringup)/launch/stm32.launch" />
 
     <!-- 2. 传感器驱动：激光雷达 -->
-    <include file="$(find lidar)/launch/lidar.launch" />
+    <include file="$(find lidar)/launch/lidar.launch">
+        <!-- 覆盖雷达默认的frame_id，与我们URDF里的雷达link名称保持一致 -->
+        <!-- <arg name="frame_id" value="radar_cylinder" /> -->
+    </include>
 
-    <!-- 3. 静态 TF：base_link -> laser -->
-    <!-- 注意：根据实际安装位置修改参数，这里假设雷达在中心上方10cm -->
-    <node pkg="tf" type="static_transform_publisher" name="base_to_laser" args="0.1 0 0.1 0 0 0 base_link laser 100" />
+    <!-- 3. URDF 机器人状态发布 (替代之前的静态TF) -->
+    <!-- 读取URDF模型并发布所有关节、机构间的静态和动态 TF -->
+    <param name="robot_description" textfile="$(find simulation)/urdf/simulation.urdf" />
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
     <!-- 4. SLAM 与 定位 (后续需配置 lua 文件) -->
     <!-- 

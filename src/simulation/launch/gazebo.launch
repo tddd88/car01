@@ -1,0 +1,35 @@
+<launch>
+  <arg name="world_name" default="$(find gazebo_ros)/worlds/empty.world" />
+  <arg name="paused" default="false" />
+  <arg name="use_sim_time" default="true" />
+  <arg name="gui" default="true" />
+  <arg name="headless" default="false" />
+  <arg name="debug" default="false" />
+  <arg name="use_rviz" default="true" />
+  <arg name="initial_roll" default="-1.57079632679" />
+  <arg name="tf_roll" default="1.57079632679" />
+  <arg name="base_link_z" default="0.04" />
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(arg world_name)" />
+    <arg name="paused" value="$(arg paused)" />
+    <arg name="use_sim_time" value="$(arg use_sim_time)" />
+    <arg name="gui" value="$(arg gui)" />
+    <arg name="headless" value="$(arg headless)" />
+    <arg name="debug" value="$(arg debug)" />
+  </include>
+
+  
+  <param name="robot_description" textfile="$(find simulation)/urdf/simulation.urdf" />
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+
+    <node name="tf_footprint_base" pkg="tf" type="static_transform_publisher"
+      args="0 0 $(arg base_link_z) 0 0 -$(arg tf_roll) base_footprint base_link 100" />
+
+  <node name="spawn_model" pkg="gazebo_ros" type="spawn_model"
+      args="-urdf -param robot_description -model simulation -R $(arg initial_roll) -P 0 -Y 0" output="screen" />
+
+  <node if="$(arg use_rviz)" name="rviz" pkg="rviz" type="rviz" output="screen" args="-d $(find simulation)/config/rviz.rviz" />
+</launch>

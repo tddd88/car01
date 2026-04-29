@@ -1,0 +1,568 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="simulation">
+ 
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="3.604" />
+      <inertia
+        ixx="0.019228842"
+        ixy="0"
+        ixz="0"
+        iyy="0.041483542"
+        iyz="0"
+        izz="0.051326967" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  
+  
+  <link
+    name="wheel_rr">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.048" />
+      <inertia
+        ixx="0.000020836"
+        ixy="0"
+        ixz="0"
+        iyy="0.000020836"
+        iyz="0"
+        izz="0.000033481" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_rr.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_rr.STL" />
+      </geometry>
+    </collision>
+    <gazebo reference="wheel_rr">
+      <mu1>0.9</mu1>
+      <mu2>0.2</mu2>
+    </gazebo>
+  </link>
+  
+  
+  <joint
+    name="rr"
+    type="continuous">
+    <origin
+      xyz="-0.11 0.0398 -0.081"
+      rpy="3.14159265358979 0 -0.38439092475999" />
+    <parent
+      link="base_link" />
+    <child
+      link="wheel_rr" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+  
+  
+  <link
+    name="wheel_fr">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.048" />
+      <inertia
+        ixx="0.000020836"
+        ixy="0"
+        ixz="0"
+        iyy="0.000020836"
+        iyz="0"
+        izz="0.000033481" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_fr.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_fr.STL" />
+      </geometry>
+    </collision>
+    <gazebo reference="wheel_fr">
+      <mu1>0.9</mu1>
+      <mu2>0.2</mu2>
+    </gazebo>
+  </link>
+  
+  
+  <joint
+    name="fr"
+    type="continuous">
+    <origin
+      xyz="0.11 0.0398 -0.0810000000000001"
+      rpy="-3.14159265358979 0 2.30073611878519" />
+    <parent
+      link="base_link" />
+    <child
+      link="wheel_fr" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+  
+  
+  <link
+    name="wheel_rl">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.048" />
+      <inertia
+        ixx="0.000020836"
+        ixy="0"
+        ixz="0"
+        iyy="0.000020836"
+        iyz="0"
+        izz="0.000033481" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_rl.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_rl.STL" />
+      </geometry>
+    </collision>
+    <gazebo reference="wheel_rl">
+      <mu1>0.9</mu1>
+      <mu2>0.2</mu2>
+    </gazebo>
+  </link>
+  
+  
+  <joint
+    name="rl"
+    type="continuous">
+    <origin
+      xyz="-0.11 0.0398 0.081"
+      rpy="0 0 -2.82199394083601" />
+    <parent
+      link="base_link" />
+    <child
+      link="wheel_rl" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+  
+  
+  <link
+    name="wheel_fl">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.048" />
+      <inertia
+        ixx="0.000020836"
+        ixy="0"
+        ixz="0"
+        iyy="0.000020836"
+        iyz="0"
+        izz="0.000033481" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_fl.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/wheel_fl.STL" />
+      </geometry>
+    </collision>
+    <gazebo reference="wheel_fl">
+      <mu1>0.9</mu1>
+      <mu2>0.2</mu2>
+    </gazebo>
+  </link>
+  
+  
+  <joint
+    name="fl"
+    type="continuous">
+    <origin
+      xyz="0.11 0.0398 0.081"
+      rpy="0 0 -2.82199394083601" />
+    <parent
+      link="base_link" />
+    <child
+      link="wheel_fl" />
+    <axis
+      xyz="0 0 1" />
+  </joint>
+ 
+ 
+  <link
+    name="camera">
+    <inertial>
+      <origin
+        xyz="0 0 0.01251"
+        rpy="0 0 0" />
+      <mass
+        value="0.072" />
+      <inertia
+        ixx="0.000017944"
+        ixy="0"
+        ixz="0"
+        iyy="0.000063430"
+        iyz="0"
+        izz="0.000051326" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/camera.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/camera.STL" />
+      </geometry>
+    </collision>
+  </link>
+  
+  
+  <joint
+    name="cam"
+    type="fixed">
+    <origin
+      xyz="0.16397 -0.0625 0"
+      rpy="1.5707963267949 -1.5707963267949 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="camera" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+ 
+ 
+  <link
+    name="raspberry_pi">
+    <inertial>
+      <origin
+        xyz="0 0.015 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.098" />
+      <inertia
+        ixx="0.000063904"
+        ixy="0"
+        ixz="0"
+        iyy="0.000104229"
+        iyz="0"
+        izz="0.000099125" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/raspberry_pi.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/raspberry_pi.STL" />
+      </geometry>
+    </collision>
+  </link>
+ 
+ 
+  <joint
+    name="ras"
+    type="fixed">
+    <origin
+      xyz="0.11741 -0.0625 0"
+      rpy="0 -1.5707963267949 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="raspberry_pi" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  
+  
+  <link
+    name="radar">
+    <inertial>
+      <origin
+        xyz="0 0.033435 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.056" />
+      <inertia
+        ixx="0.000103234"
+        ixy="0"
+        ixz="0"
+        iyy="0.000026815"
+        iyz="0"
+        izz="0.000103234" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/radar.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://simulation/meshes/radar.STL" />
+      </geometry>
+    </collision>
+  </link>
+  
+  
+  <joint
+    name="rad"
+    type="fixed">
+    <origin
+      xyz="0 -0.0625 0"
+      rpy="3.14159265358979 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="radar" />
+    <axis
+      xyz="0 0 0" />
+    </joint>
+
+
+  <link
+    name="radar_cylinder">
+    <inertial>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <mass
+        value="0.001" />
+      <inertia
+        ixx="1e-08"
+        ixy="0"
+        ixz="0"
+        iyy="1e-08"
+        iyz="0"
+        izz="1e-08" />
+    </inertial>
+  </link>
+
+
+  <joint
+    name="radar_to_cylinder"
+    type="fixed">
+    <origin
+      xyz="0 0.055 0"
+      rpy="-1.57079632679 0 0" />
+    <parent
+      link="radar" />
+    <child
+      link="radar_cylinder" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+
+
+  <gazebo reference="radar_cylinder">
+    <sensor type="ray" name="radar_laser_sensor">
+      <pose>0 0 0 0 0 0</pose>
+      <visualize>true</visualize>
+      <update_rate>30</update_rate>
+      <ray>
+        <scan>
+          <horizontal>
+            <samples>1080</samples>
+            <resolution>1</resolution>
+            <min_angle>-2.35619449</min_angle>
+            <max_angle>2.35619449</max_angle>
+          </horizontal>
+        </scan>
+        <range>
+          <min>0.1</min>
+          <max>100.0</max>
+          <resolution>0.001</resolution>
+        </range>
+      </ray>
+      <plugin name="gazebo_ros_laser" filename="libgazebo_ros_laser.so">
+        <topicName>/scan</topicName>
+        <frameName>radar_cylinder</frameName>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+
+  <gazebo reference="camera">
+    <sensor type="camera" name="front_camera_sensor">
+      <pose>0 0 0 0 0 0</pose>
+      <update_rate>30</update_rate>
+      <camera>
+        <horizontal_fov>1.3962634</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>50.0</far>
+        </clip>
+      </camera>
+      <plugin name="gazebo_ros_camera" filename="libgazebo_ros_camera.so">
+        <alwaysOn>true</alwaysOn>
+        <updateRate>30.0</updateRate>
+        <cameraName>camera</cameraName>
+        <imageTopicName>/rgb/image_raw</imageTopicName>
+        <cameraInfoTopicName>/rgb/camera_info</cameraInfoTopicName>
+        <frameName>camera</frameName>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+
+  <gazebo>
+    <plugin name="gazebo_ros_planar_move" filename="libgazebo_ros_planar_move.so">
+      <commandTopic>cmd_vel</commandTopic>
+      <odometryTopic>odom</odometryTopic>
+      <odometryFrame>odom</odometryFrame>
+      <robotBaseFrame>base_footprint</robotBaseFrame>
+      <publishTF>true</publishTF>
+      <publishOdometry>true</publishOdometry>
+      <updateRate>50.0</updateRate>
+    </plugin>
+  </gazebo>
+
+
+  </robot>
