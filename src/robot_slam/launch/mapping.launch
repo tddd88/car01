@@ -1,0 +1,18 @@
+<launch>
+    <!-- 启动 cartographer 节点进行建图 -->
+    <node name="cartographer_node" pkg="cartographer_ros"
+        type="cartographer_node" args="
+            -configuration_directory $(find robot_slam)/config
+            -configuration_basename mapping.lua"
+        output="screen">
+        <remap from="odom" to="odom_raw" />
+    </node>
+
+    <!-- 生成占据栅格地图以供 Rviz 和后续导航使用 -->
+    <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros"
+        type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+
+    <!-- 启动 Rviz -->
+    <!-- <node name="rviz" pkg="rviz" type="rviz" required="true"
+        args="-d $(find robot_slam)/rviz/mapping.rviz" /> -->
+</launch>

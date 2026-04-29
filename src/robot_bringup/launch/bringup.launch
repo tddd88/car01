@@ -5,7 +5,7 @@
     <include file="$(find robot_bringup)/launch/stm32.launch" />
 
     <!-- 2. 传感器驱动：激光雷达 -->
-    <include file="$(find lidar)/launch/lidar.launch">
+    <include file="$(find lidar)/launch/lidar_scan.launch">
         <!-- 覆盖雷达默认的frame_id，与我们URDF里的雷达link名称保持一致 -->
         <!-- <arg name="frame_id" value="radar_cylinder" /> -->
     </include>
@@ -16,15 +16,23 @@
     <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
-    <!-- 4. SLAM 与 定位 (后续需配置 lua 文件) -->
+    <!-- 4. SLAM 与 定位 (现已剥离至 robot_slam 功能包) -->
     <!-- 
-    <node name="cartographer_node" pkg="cartographer_ros"
-        type="cartographer_node" args="
-            -configuration_directory $(find robot_bringup)/config
-            -configuration_basename mapping.lua"
-        output="screen">
-        <remap from="odom" to="odom_raw" />
-    </node>
+    请在另一个终端中，根据需求启动建图或定位：
+    roslaunch robot_slam mapping.launch 
+    或
+    roslaunch robot_slam localization.launch
     -->
+
+    <!-- 5. 传感器驱动：USB摄像头 -->
+    <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen">
+        <param name="video_device" value="/dev/video0" />
+        <param name="pixel_format" value="mjpeg" />
+        <param name="image_width" value="320" />
+        <param name="image_height" value="240" />
+        <param name="framerate" value="15" />
+        <!-- 这里覆盖相机发出的TF绑定的名称，与 URDF 中的 "camera" 连通 -->
+        <param name="camera_frame_id" value="camera" />
+    </node>
 
 </launch>

@@ -1,0 +1,12 @@
+<launch>
+    <!-- 允许通过终端传参 pbstream:=/path/to/your.pbstream -->
+    <arg name="pbstream" default="$(find robot_slam)/map/map.pbstream" />
+
+    <!-- 1. 启动所有底层硬件和TF -->
+    <include file="$(find robot_bringup)/launch/bringup.launch" />
+
+    <!-- 2. 启动 Cartographer 纯定位 -->
+    <include file="$(find robot_slam)/launch/localization.launch">
+        <arg name="pbstream" value="$(arg pbstream)" />
+    </include>
+</launch>

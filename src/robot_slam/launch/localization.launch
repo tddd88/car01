@@ -1,0 +1,19 @@
+<launch>
+    <!-- 请在启动前确认地图文件是否已准备好，可以在命令行传参 pbstream:=/path/to/map.pbstream -->
+    <arg name="pbstream" default="$(find robot_slam)/map/map.pbstream" />
+
+    <!-- 启动 cartographer 节点进行纯定位 -->
+    <node name="cartographer_node" pkg="cartographer_ros"
+        type="cartographer_node" args="
+            -configuration_directory $(find robot_slam)/config
+            -configuration_basename localization.lua
+            -load_state_filename $(arg pbstream)"
+        output="screen">
+        <remap from="odom" to="odom_raw" />
+    </node>
+
+    <!-- 生成占据栅格地图 -->
+    <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros"
+        type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+
+</launch>

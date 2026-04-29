@@ -1,0 +1,7 @@
+<launch>
+    <!-- 1. 启动所有底层硬件和TF -->
+    <include file="$(find robot_bringup)/launch/bringup.launch" />
+
+    <!-- 2. 启动 Cartographer 建图 (全家桶包含建图和栅格地图生成) -->
+    <include file="$(find robot_slam)/launch/mapping.launch" />
+</launch>
