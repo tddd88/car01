@@ -75,12 +75,12 @@ int main(int argc, char** argv) {
         ser.setTimeout(to);
         ser.open();
     } catch (const serial::IOException& e) {
-        ROS_ERROR("串口打开失败: %s", e.what());
+        ROS_ERROR("UART FAILED: %s", e.what());
         return -1;
     }
 
     if (ser.isOpen()) {
-        ROS_INFO("串口已连接！等待 32轮式里程计数据...");
+        ROS_INFO("UART ON, Port: %s, Baudrate: %d", port_name.c_str(), baud_rate);
     }
 
     double x_pos = 0.0, y_pos = 0.0, th_pos = 0.0;

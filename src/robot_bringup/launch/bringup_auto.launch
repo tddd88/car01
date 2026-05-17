@@ -1,0 +1,5 @@
+<launch>
+    <!-- 1. 自启动版本：伴随开机拉起。只启用STM32与手柄节点，不开启雷达和SLAM，省电低负载 -->
+    <include file="$(find robot_bringup)/launch/stm32.launch" />
+    <include file="$(find robot_bringup)/launch/joystick.launch" />
+</launch>

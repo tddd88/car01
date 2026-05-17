@@ -1,7 +1,15 @@
 <launch>
-    <!-- 1. 启动所有底层硬件和TF -->
+    <!-- 1. 启动所有底层硬件和TF（包含雷达、摄像头等） -->
     <include file="$(find robot_bringup)/launch/bringup.launch" />
 
-    <!-- 2. 启动 Cartographer 建图 (全家桶包含建图和栅格地图生成) -->
+    <!-- 2. 启动手柄遥控功能 -->
+    <include file="$(find robot_bringup)/launch/joystick.launch" />
+
+    <!-- 3. 启动 Cartographer 建图 (全家桶包含建图和栅格地图生成) -->
     <include file="$(find robot_slam)/launch/mapping.launch" />
+
+    <!-- 4. 加入自动保存地图的监控脚本（当launch被ctrl+c结束时保存地图） -->
+    <node pkg="robot_bringup" type="auto_save_map.py" name="auto_save_map" output="screen">
+        <param name="map_file" value="$(find robot_slam)/map/map.pbstream" />
+    </node>
 </launch>

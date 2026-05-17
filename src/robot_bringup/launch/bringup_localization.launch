@@ -5,7 +5,10 @@
     <!-- 1. 启动所有底层硬件和TF -->
     <include file="$(find robot_bringup)/launch/bringup.launch" />
 
-    <!-- 2. 启动 Cartographer 纯定位 -->
+    <!-- 2. 启动手柄遥控功能 -->
+    <include file="$(find robot_bringup)/launch/joystick.launch" />
+
+    <!-- 3. 启动 Cartographer 纯定位 -->
     <include file="$(find robot_slam)/launch/localization.launch">
         <arg name="pbstream" value="$(arg pbstream)" />
     </include>
