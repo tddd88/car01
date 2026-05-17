@@ -1,5 +1,8 @@
 <launch>
     <!-- 1. 自启动版本：伴随开机拉起。只启用STM32与手柄节点，不开启雷达和SLAM，省电低负载 -->
-    <include file="$(find robot_bringup)/launch/stm32.launch" />
+    <!-- 可通过传入 delay 参数调整等待时间（秒），默认 5 秒，便于 STM32 上电就绪 -->
+    <include file="$(find robot_bringup)/launch/stm32.launch">
+        <arg name="delay" value="5" />
+    </include>
     <include file="$(find robot_bringup)/launch/joystick.launch" />
 </launch>

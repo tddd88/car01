@@ -1,0 +1,20 @@
+[Unit]
+Description=Bringup auto launch for robot_bringup (starts on boot)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Environment=DISPLAY=:0
+ExecStart=/bin/bash -lc "source /home/ubuntu/carto_ws/install_isolated/setup.bash && source /home/ubuntu/car01/devel/setup.bash && roslaunch robot_bringup bringup_auto.launch"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+# To enable at boot:
+# sudo cp /home/ubuntu/car01/deploy/bringup_auto.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable bringup_auto.service
+# sudo systemctl start bringup_auto.service
