@@ -12,4 +12,7 @@
     <node pkg="robot_bringup" type="auto_save_map.py" name="auto_save_map" output="screen">
         <param name="map_file" value="$(find robot_slam)/map/map.pbstream" />
     </node>
+
+    <!-- 自动保存路径预备点 (手柄B键) -->
+    <node pkg="robot_bringup" type="waypoints_saver.py" name="waypoints_saver" output="screen" />
 </launch>
