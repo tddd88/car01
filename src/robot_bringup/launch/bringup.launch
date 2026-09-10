@@ -1,8 +1,9 @@
 <launch>
-    <!-- V4架构总入口：Cartographer 统一方案 -->
+    <!-- V4架构总入口：全传感器驱动 + 手柄遥控 + 激光安全避障
+         （不开 SLAM/导航/视觉，用于在 PC rviz 调试传感器与遥控） -->
 
-    <!-- 1. 底层通讯：仅提供 /odom_raw -->
-    <include file="$(find robot_bringup)/launch/stm32.launch" />
+    <!-- 1. 底层通讯：仅提供 /odom_raw（纯桥，不带手柄） -->
+    <include file="$(find robot_bringup)/launch/stm32_bridge.launch" />
 
     <!-- 2. 传感器驱动：激光雷达 -->
     <include file="$(find lidar)/launch/lidar_scan.launch">
@@ -16,7 +17,24 @@
     <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
-    <!-- 4. SLAM 与 定位 (现已剥离至 robot_slam 功能包) -->
+    <!-- 4. 手柄遥控：输出 cmd_vel_raw，经 laser_safety_node 过滤后发 cmd_vel -->
+    <include file="$(find robot_bringup)/launch/joystick.launch" />
+
+    <!-- 4.5 激光安全避障：cmd_vel_raw -> [laser_safety_node] -> cmd_vel -> stm32_bridge
+         雷达无数据时自动透传，退化为纯遥控
+         注意：name 必须与 bringup_auto 中一致，避免同名冲突 -->
+    <node pkg="robot_bringup" type="laser_safety_node" name="laser_safety_node" output="screen">
+        <param name="cmd_vel_in"  value="cmd_vel_raw" />
+        <param name="cmd_vel_out" value="cmd_vel" />
+        <param name="scan_topic"  value="/scan" />
+        <param name="safe_dist_front" value="0.20" />
+        <param name="safe_dist_rear"  value="0.20" />
+        <param name="safe_dist_left"  value="0.15" />
+        <param name="safe_dist_right" value="0.15" />
+        <param name="slow_factor"     value="2.0" />
+    </node>
+
+    <!-- 5. SLAM 与 定位 (现已剥离至 robot_slam 功能包) -->
     <!-- 
     请在另一个终端中，根据需求启动建图或定位：
     roslaunch robot_slam mapping.launch 
@@ -24,7 +42,7 @@
     roslaunch robot_slam localization.launch
     -->
 
-    <!-- 5. 传感器驱动：USB摄像头 -->
+    <!-- 7. 传感器驱动：USB摄像头（发布 /usb_cam/image_raw） -->
     <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen">
         <param name="video_device" value="/dev/video0" />
         <param name="pixel_format" value="mjpeg" />

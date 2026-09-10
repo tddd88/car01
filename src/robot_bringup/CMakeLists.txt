@@ -125,6 +125,15 @@ include_directories(
 
 add_executable(stm32_bridge src/stm32_bridge.cpp)
 target_link_libraries(stm32_bridge ${catkin_LIBRARIES})
+
+add_executable(joy_repeat_node src/joy_repeat_node.cpp)
+target_link_libraries(joy_repeat_node ${catkin_LIBRARIES})
+
+add_executable(laser_safety_node src/laser_safety_node.cpp)
+target_link_libraries(laser_safety_node ${catkin_LIBRARIES})
+
+add_executable(chassis_corrector_node src/chassis_corrector_node.cpp)
+target_link_libraries(chassis_corrector_node ${catkin_LIBRARIES})
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/robot_bringup.cpp
 # )

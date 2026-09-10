@@ -10,7 +10,7 @@
 
     <!-- 生成占据栅格地图以供 Rviz 和后续导航使用 -->
     <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros"
-        type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+        type="cartographer_occupancy_grid_node" args="-resolution 0.03" />
 
     <!-- 启动 Rviz -->
     <!-- <node name="rviz" pkg="rviz" type="rviz" required="true"

@@ -43,7 +43,13 @@ void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
     tx.vth = msg->angular.z * 1000;
     tx.tail = 0xEE;
 
-    ser.write((const uint8_t*)&tx, sizeof(TxPacket));
+    try {
+        ser.write((const uint8_t*)&tx, sizeof(TxPacket));
+    } catch (const serial::SerialException& e) {
+        ROS_WARN_THROTTLE(2.0, "cmd_vel write failed: %s", e.what());
+    } catch (const serial::IOException& e) {
+        ROS_WARN_THROTTLE(2.0, "cmd_vel write IO error: %s", e.what());
+    }
 }
 
 int main(int argc, char** argv) {
@@ -68,15 +74,33 @@ int main(int argc, char** argv) {
     //V4
     //tf::TransformBroadcaster odom_broadcaster;
 
-    try {
-        ser.setPort(port_name);
-        ser.setBaudrate(baud_rate);
-        serial::Timeout to = serial::Timeout::simpleTimeout(1000);
-        ser.setTimeout(to);
-        ser.open();
-    } catch (const serial::IOException& e) {
-        ROS_ERROR("UART FAILED: %s", e.what());
-        return -1;
+    // 串口打开重试：开机时 USB 可能尚未枚举完成
+    ser.setPort(port_name);
+    ser.setBaudrate(baud_rate);
+    serial::Timeout to = serial::Timeout::simpleTimeout(1000);
+    ser.setTimeout(to);
+
+    ros::Time retry_start = ros::Time::now();
+    double retry_timeout = 30.0; // 最长重试 30 秒
+    while (ros::ok()) {
+        try {
+            ser.open();
+            break;
+        } catch (const serial::IOException& e) {
+            ROS_WARN_THROTTLE(3.0, "UART open failed (will retry): %s", e.what());
+            if ((ros::Time::now() - retry_start).toSec() > retry_timeout) {
+                ROS_ERROR("UART FAILED after %.0fs: %s", retry_timeout, e.what());
+                return -1;
+            }
+            ros::Duration(1.0).sleep();
+        } catch (const serial::SerialException& e) {
+            ROS_WARN_THROTTLE(3.0, "UART serial error (will retry): %s", e.what());
+            if ((ros::Time::now() - retry_start).toSec() > retry_timeout) {
+                ROS_ERROR("UART FAILED after %.0fs: %s", retry_timeout, e.what());
+                return -1;
+            }
+            ros::Duration(1.0).sleep();
+        }
     }
 
     if (ser.isOpen()) {
@@ -84,15 +108,41 @@ int main(int argc, char** argv) {
     }
 
     double x_pos = 0.0, y_pos = 0.0, th_pos = 0.0;
-    ros::Time last_time = ros::Time::now();
+    ros::Time last_time;
+    bool have_last_time = false;
 
     ros::Rate rate(50); // 50Hz频率
     std::vector<uint8_t> rx_buffer;
 
     while (ros::ok()) {
-        if (ser.available()) {
-            std::string raw = ser.read(ser.available());
-            rx_buffer.insert(rx_buffer.end(), raw.begin(), raw.end());
+        // 运行时串口异常保护：USB 断开等不会导致进程 abort
+        try {
+            if (ser.isOpen() && ser.available()) {
+                std::string raw = ser.read(ser.available());
+                rx_buffer.insert(rx_buffer.end(), raw.begin(), raw.end());
+            }
+        } catch (const serial::SerialException& e) {
+            ROS_WARN_THROTTLE(2.0, "RX read failed: %s, reconnecting...", e.what());
+            try { ser.close(); } catch (...) {}
+            ros::Duration(0.5).sleep();
+            try {
+                ser.open();
+                ROS_INFO("UART reconnected.");
+            } catch (const std::exception& re) {
+                ROS_WARN_THROTTLE(3.0, "reconnect failed: %s", re.what());
+            }
+            continue;
+        } catch (const serial::IOException& e) {
+            ROS_WARN_THROTTLE(2.0, "RX IO error: %s, reconnecting...", e.what());
+            try { ser.close(); } catch (...) {}
+            ros::Duration(0.5).sleep();
+            try {
+                ser.open();
+                ROS_INFO("UART reconnected.");
+            } catch (const std::exception& re) {
+                ROS_WARN_THROTTLE(3.0, "reconnect failed: %s", re.what());
+            }
+            continue;
         }
 
         while (rx_buffer.size() >= sizeof(RxPacket)) {
@@ -100,13 +150,22 @@ int main(int argc, char** argv) {
                 RxPacket* rxPack = (RxPacket*)rx_buffer.data();
                 
                 if (rxPack->tail == 0xEE) {
-                    // 解析：int16 mm/s -> float m/s
+                    // 解析：int16 mm/s -> float m/s；STM32 的 vy 向右为正，ROS 的 y 轴向左为正
                     double vx = rxPack->vx / 1000.0;
-                    double vy = rxPack->vy / 1000.0;
+                    double vy = -rxPack->vy / 1000.0;
                     double vth= rxPack->vth / 1000.0;
 
                     ros::Time current_time = ros::Time::now();
+                    if (!have_last_time) {
+                        last_time = current_time;
+                        have_last_time = true;
+                    }
+
                     double dt = (current_time - last_time).toSec();
+                    if (dt <= 0.0 || dt > 0.2) {
+                        // 串口断续时丢弃这段时间，避免用一帧速度制造大位移跳变。
+                        dt = 0.0;
+                    }
 
                     // 航迹推算
                     double dx = (vx * cos(th_pos) - vy * sin(th_pos)) * dt;

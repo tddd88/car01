@@ -1,0 +1,32 @@
+<launch>
+    <!-- 视觉控制：蓝色靶标检测 + 视觉伺服 -->
+
+    <arg name="run_servo" default="true" />
+
+    <!-- 蓝色检测节点（HSV 参数可在下方 rosparam 现场调整） -->
+    <node pkg="vision_control" type="blue_detector_node" name="blue_detector" output="screen">
+        <rosparam>
+            hsv_low_h: 90
+            hsv_high_h: 130
+            hsv_low_s: 80
+            hsv_high_s: 255
+            hsv_low_v: 50
+            hsv_high_v: 255
+            min_area: 800
+            morph_kernel: 5
+        </rosparam>
+    </node>
+
+    <!-- 视觉伺服节点（PID 参数） -->
+    <node if="$(arg run_servo)" pkg="vision_control" type="visual_servo_node" name="visual_servo" output="screen">
+        <rosparam>
+            kp_x: 0.5
+            kp_y: 1.0
+            kp_yaw: 1.5
+            target_area: 0.30
+            max_vx: 0.25
+            max_vy: 0.30
+            max_wz: 0.60
+        </rosparam>
+    </node>
+</launch>

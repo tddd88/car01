@@ -1,0 +1,20 @@
+<launch>
+    <!-- 决策：比赛状态机 + 预备点保存 -->
+
+    <!-- 预备点保存（手柄 B 键，idx=1, X-Box 360 pad），发布 latched /vision_start_point -->
+    <node pkg="robot_bringup" type="waypoints_saver.py" name="waypoints_saver" output="screen">
+        <param name="button_idx" value="1" />
+        <param name="save_dir" value="$(find robot_slam)/map" />
+    </node>
+
+    <!-- 比赛状态机（导航 -> 视觉伺服 -> 盲搜） -->
+    <node pkg="decision" type="race_state_machine_node" name="race_state_machine" output="screen">
+        <rosparam>
+            search_speed: 0.2        # 盲搜横移速度 (m/s)
+            search_wall_margin: 0.30 # 距挡板停止反向距离 (m)
+            search_max_time: 30.0    # 盲搜最长时长 (s)
+            target_timeout: 1.0      # 蓝纸丢失判定 (s)
+            search_side_window: 0.2  # 侧向扫描角度窗 (rad)
+        </rosparam>
+    </node>
+</launch>

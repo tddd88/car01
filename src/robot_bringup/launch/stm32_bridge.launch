@@ -1,0 +1,10 @@
+<launch>
+    <!-- 纯 STM32 串口桥（底层组件，供其他 launch include，不含手柄） -->
+    <arg name="delay" default="5" />
+    <node pkg="robot_bringup" type="stm32_bridge" name="stm32_bridge" output="log" respawn="true" respawn_delay="3" launch-prefix="bash -c 'sleep $(arg delay); $0 $@' ">
+        <param name="port_name" value="/dev/ttyUSB0" type="string" />
+        <param name="baud_rate" value="115200" type="int" />
+        <!-- V4架构: 将里程计TF推算权转移给 Cartographer，这里必须为 false 避免 TF 树冲突树干断裂！ -->
+        <param name="publish_tf" value="false" type="bool" />
+    </node>
+</launch>

@@ -1,14 +1,23 @@
 <launch>
   <node pkg="move_base" type="move_base" respawn="false" name="move_base" output="screen">
     <param name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS" />
-    
+    <!-- 底盘里程计实际话题为 /odom_raw，需重映射给 TEB / move_base 使用 -->
+    <remap from="odom" to="odom_raw" />
+    <!-- 底盘最终执行话题为 /cmd_vel，move_base 输出改名为 /cmd_vel_nav 交给状态机调度 -->
+    <remap from="cmd_vel" to="cmd_vel_nav"/>
+
+    <param name="controller_frequency" value="10.0" />
+    <param name="planner_frequency" value="2.0" />
+    <param name="conservative_reset_dist" value="3.0" />
+
+    <!-- 代价图参数 -->
     <rosparam file="$(find navigation)/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
     <rosparam file="$(find navigation)/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
     <rosparam file="$(find navigation)/config/local_costmap_params.yaml" command="load" />
     <rosparam file="$(find navigation)/config/global_costmap_params.yaml" command="load" />
     <rosparam file="$(find navigation)/config/teb_local_planner_params.yaml" command="load" />
 
-    <!-- Remap output velocity to /cmd_vel_nav so the State Machine takes priority control over /cmd_vel -->
-    <remap from="cmd_vel" to="cmd_vel_nav"/>
+    <!-- 恢复行为：简单清除代价 -->
+    <param name="recovery_behavior_enabled" value="true" />
   </node>
 </launch>

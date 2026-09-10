@@ -1,0 +1,20 @@
+<launch>
+    <!-- 视觉调试入口：只起视觉节点，发布 /rgb/blue_target_debug_img 供 PC 端 rviz 订阅
+         树莓派（无头 server）上运行，PC 端自行开 rviz 订阅调试图。
+         用法（在树莓派上）：
+           roslaunch vision_control vision_debug.launch              # 只看调试图，不动车
+           roslaunch vision_control vision_debug.launch run_servo:=true  # 伺服直通 cmd_vel 调试动车
+         前提：bringup.launch 已启动（提供 /usb_cam/image_raw）。
+         PC 端：配好 ROS_MASTER_URI 后开 rviz，加 Image 显示项订阅 /rgb/blue_target_debug_img -->
+
+    <arg name="run_servo" default="false" />
+
+    <!-- 蓝色检测节点（发布 /blue_target + /rgb/blue_target_debug_img） -->
+    <include file="$(find vision_control)/launch/vision.launch">
+        <arg name="run_servo" value="$(arg run_servo)" />
+    </include>
+
+    <!-- 伺服直通：把 visual_servo 的 /cmd_vel_vision remap 到 /cmd_vel，绕过状态机直接动车调试 -->
+    <node if="$(arg run_servo)" pkg="topic_tools" type="relay" name="cmd_vel_vision_relay"
+          args="/cmd_vel_vision /cmd_vel" />
+</launch>

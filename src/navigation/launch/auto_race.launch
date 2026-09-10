@@ -1,14 +1,11 @@
 <launch>
-    <!-- 比赛一键启动入口（比赛手敲）：
-         硬件 + 手柄 + Cartographer 纯定位 + move_base 导航 + 视觉伺服 + 决策状态机 -->
+    <!-- V4.1 全自动比赛总入口：硬件 + 定位 + 导航 + 视觉 + 决策 -->
 
-    <!-- 允许通过终端传参 pbstream:=/path/to/your.pbstream -->
-    <arg name="pbstream" default="$(find robot_slam)/map/map.pbstream" />
-
-    <!-- 1. 启动所有底层硬件和TF（含雷达、摄像头、手柄遥控、激光安全避障） -->
+    <!-- 1. 底层硬件、TF、雷达、摄像头 -->
     <include file="$(find robot_bringup)/launch/bringup.launch" />
 
-    <!-- 2. 启动 Cartographer 纯定位 -->
+    <!-- 2. Cartographer 纯定位（加载已建图 pbstream） -->
+    <arg name="pbstream" default="$(find robot_slam)/map/map.pbstream" />
     <include file="$(find robot_slam)/launch/localization.launch">
         <arg name="pbstream" value="$(arg pbstream)" />
     </include>
@@ -19,6 +16,6 @@
     <!-- 4. 视觉控制（蓝纸检测 + 伺服，输出 /cmd_vel_vision） -->
     <include file="$(find vision_control)/launch/vision.launch" />
 
-    <!-- 5. 决策状态机 + 预备点加载（总控 /cmd_vel） -->
+    <!-- 5. 决策状态机 + 预备点保存（总控 /cmd_vel） -->
     <include file="$(find decision)/launch/race.launch" />
 </launch>

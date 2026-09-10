@@ -43,9 +43,21 @@ TRAJECTORY_BUILDER_2D.use_online_correlative_scan_matching = true
 -- 里程计的信任度（麦轮容易打滑，所以不要太信任里程计）
 TRAJECTORY_BUILDER_2D.motion_filter.max_angle_radians = math.rad(0.1)
 
--- 相关扫描匹配权重：因为没有IMU，必须通过雷达和里程计获取姿态，略微提高雷达的平移和旋转匹配权重
+-- 扫描匹配残差权重（雷达数据的可信度，保持较高）
 TRAJECTORY_BUILDER_2D.ceres_scan_matcher.translation_weight = 20.0
 TRAJECTORY_BUILDER_2D.ceres_scan_matcher.rotation_weight = 40.0
+
+-- 里程计先验权重（麦轮打滑+无IMU，降低里程计对位姿的约束，让扫描匹配主导）
+-- 默认为 0，Cartographer 会用 translation_weight/rotation_weight 作为里程计权重；
+-- 显式设小值，让里程计只作为初值猜测，不强制约束最终位姿。
+TRAJECTORY_BUILDER_2D.ceres_scan_matcher.odometry_translation_weight = 1.0
+TRAJECTORY_BUILDER_2D.ceres_scan_matcher.odometry_rotation_weight = 1.0
+
+-- 在线相关扫描匹配的搜索窗口（默认较小，剧烈转弯时里程计先验偏差大，需要扩大搜索范围）
+TRAJECTORY_BUILDER_2D.real_time_correlative_scan_matcher.linear_search_window = 0.15
+TRAJECTORY_BUILDER_2D.real_time_correlative_scan_matcher.angular_search_window = math.rad(20.0)
+TRAJECTORY_BUILDER_2D.real_time_correlative_scan_matcher.translation_delta_range = 3.0
+TRAJECTORY_BUILDER_2D.real_time_correlative_scan_matcher.rotation_delta_range = math.rad(60.0)
 
 -- 子图大小，可根据比赛场地适度调小，加速匹配
 TRAJECTORY_BUILDER_2D.submaps.num_range_data = 50

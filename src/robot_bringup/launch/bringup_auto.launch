@@ -1,8 +1,30 @@
 <launch>
-    <!-- 1. 自启动版本：伴随开机拉起。只启用STM32与手柄节点，不开启雷达和SLAM，省电低负载 -->
+    <!-- 1. 自启动版本：伴随开机拉起。
+         与 bringup.launch 节点完全一致，手动开 bringup.launch 时同名节点自动接管。
+         - 雷达节点 respawn=true：接触不好/掉线时自动重连，不拖垮整个 launch。
+         - laser_safety_node 内部容错：雷达无数据时直接透传 cmd_vel_raw -> cmd_vel，退化为纯遥控。
+         - roslaunch 主进程不会因单个节点失败而退出，systemd 不会触发重启循环。 -->
+
     <!-- 可通过传入 delay 参数调整等待时间（秒），默认 5 秒，便于 STM32 上电就绪 -->
-    <include file="$(find robot_bringup)/launch/stm32.launch">
+    <include file="$(find robot_bringup)/launch/stm32_bridge.launch">
         <arg name="delay" value="5" />
     </include>
+
+    <!-- 激光雷达驱动（respawn=true：接触不好时自动重连，不拖垮开机自启） -->
+    <include file="$(find lidar)/launch/lidar_scan.launch" />
+
+    <!-- 手柄遥控：输出 cmd_vel_raw，经 laser_safety_node 过滤后发 cmd_vel -->
     <include file="$(find robot_bringup)/launch/joystick.launch" />
+
+    <!-- 激光安全避障：cmd_vel_raw -> [laser_safety_node] -> cmd_vel -> stm32_bridge -->
+    <node pkg="robot_bringup" type="laser_safety_node" name="laser_safety_node" output="log" respawn="true" respawn_delay="3">
+        <param name="cmd_vel_in"  value="cmd_vel_raw" />
+        <param name="cmd_vel_out" value="cmd_vel" />
+        <param name="scan_topic"  value="/scan" />
+        <param name="safe_dist_front" value="0.20" />
+        <param name="safe_dist_rear"  value="0.20" />
+        <param name="safe_dist_left"  value="0.15" />
+        <param name="safe_dist_right" value="0.15" />
+        <param name="slow_factor"     value="2.0" />
+    </node>
 </launch>

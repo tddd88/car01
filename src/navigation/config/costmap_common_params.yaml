@@ -4,7 +4,8 @@ raytrace_range: 3.0
 footprint: [[-0.2, -0.15], [-0.2, 0.15], [0.2, 0.15], [0.2, -0.15]]
 #robot_radius: 0.25
 
-inflation_radius: 0.3 # 默认保留一个通用值
+# 注意：inflation_radius 已在 global_costmap_params(0.45) 与 local_costmap_params(0.2) 中单独定义，
+# 此处不再重复，避免被覆盖产生歧义。
 
 observation_sources: laser_scan_sensor
 laser_scan_sensor: {sensor_frame: radar_cylinder, data_type: LaserScan, topic: /scan, marking: true, clearing: true}
