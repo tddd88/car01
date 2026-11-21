@@ -137,12 +137,14 @@ USB hub 供电问题); 要求建图不开摄像头、导航入口(nav_test/bring
   小场地内安全层会在墙前自动压速, 全速只在长直线中段出现。
 
 **蓝色不停的原因(日志实锤, 非代码 bug)**: 18:05 那轮 usb_cam 启动 1 秒即死,
-respawn 每 5s 拉起又立刻死; 当前 /dev/video0 不存在、lsusb 无相机、dmesg 报
-`Cannot enable. Maybe the USB cable is bad?`——相机物理掉线(与手柄接收器同一 hub
-供电问题)。无图像 → blue_detector 不发 /vision/target → 状态机 SEARCHING 无目标可锁,
+respawn 每 5s 拉起又立刻死; 当时 /dev/video0 不存在、lsusb 无相机、dmesg 报
+`Cannot enable. Maybe the USB cable is bad?`——相机那段 USB 链路枚举失败。
+(2026-10-25 用户更正: hub 是独立供电的, 手柄/STM32 的历史问题与 hub 无关,
+现在 hub 上只有雷达和相机; 相机掉线优先怀疑相机自身的线材/接口。)
+无图像 → blue_detector 不发 /vision/target → 状态机 SEARCHING 无目标可锁,
 只能继续旋转。软件链(检测归一化坐标、targetCb 校验、0.4s 稳定判据)审查无误。
-修复: 相机直插树莓派或换带独立供电的 hub; 恢复后在 PC 看 /rgb/blue_target_debug_img
-绿框验证 HSV(手持蓝色物体需落在 H90-130/S>80/V>50 且面积>800px)。
+恢复后在 PC 看 /rgb/blue_target_debug_img 绿框验证 HSV(手持蓝色物体需落在
+H90-130/S>80/V>50 且面积>800px)。
 
 **全文件审查其他发现**(均未改):
 - joy_repeat 无新鲜输入时 20Hz 发零到 /cmd_vel_raw, 与"零只发一次"约定不完全一致,

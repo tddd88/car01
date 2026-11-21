@@ -211,6 +211,35 @@ class MapBundleSaver:
                 rospy.logerr("commit final 失败；active 指针保持原版本：%s", exc)
                 return TriggerResponse(False, str(exc))
 
+    def _backfill_vision_point(self, map_id, map_sha):
+        """把本次会话的 map_id/sha256 回填到 vision_point.yaml。
+
+        建图期间按 B 写点无法预知最终地图哈希，这里在转正后补齐，
+        使 B 点与最终地图版本绑定（load_legacy_point 的校验依赖它）。
+        """
+        if not map_id or not map_sha:
+            return
+        point_path = os.path.join(os.path.dirname(self.root), "vision_point.yaml")
+        if not os.path.isfile(point_path):
+            rospy.loginfo("本次建图未按 B 键标点，跳过预备点回填")
+            return
+        try:
+            with open(point_path) as stream:
+                doc = yaml.safe_load(stream) or {}
+            point_id = doc.get("map_id")
+            # 只回填属于本次会话的点；别的会话的点不动。
+            if point_id and point_id != map_id:
+                rospy.logwarn("vision_point.yaml 属于 %s（本次 %s），不回填", point_id, map_id)
+                return
+            if doc.get("map_sha256") == map_sha:
+                return
+            doc["map_id"] = map_id
+            doc["map_sha256"] = map_sha
+            atomic_yaml(point_path, doc)
+            rospy.loginfo("已回填预备点地图版本：map_id=%s sha=%s", map_id, map_sha[:12])
+        except Exception as exc:
+            rospy.logwarn("预备点回填失败：%s", exc)
+
     def fallback_promote(self):
         """兜底：没走正式 finalize（如直接 Ctrl+C）时，用最近的周期快照转正。
 
@@ -240,6 +269,11 @@ class MapBundleSaver:
                 rospy.loginfo("旧地图已备份：%s", backup)
             shutil.copy2(snap_pbstream, legacy_map)
             rospy.loginfo("兜底转正完成：%s -> %s（map_id=%s）", snap_pbstream, legacy_map, meta.get("map_id"))
+            # 回填预备点的地图哈希。
+            # 建图期间按 B 写入的点只能知道 map_id（当时 map.pbstream 还是上一张图，
+            # 无法预知最终哈希）。转正后这里把本会话的 map_id/sha 回填，
+            # 否则加载时版本校验会一直拒绝这个点。
+            self._backfill_vision_point(meta.get("map_id"), actual)
             # 位姿必须与地图配套更新，否则导航起始位置会错。
             # 优先用快照里记录的位姿（建图期间实时采集，可靠）；
             # 没有才退化为当前 TF（退出时多半取不到）。

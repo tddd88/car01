@@ -1,13 +1,13 @@
 <launch>
-    <!-- 蓝色靶标：检测和调试画面；控制输出必须经过比赛仲裁与统一安全层。 -->
+    <!-- 临时改为红色终点标识：检测和调试画面；控制输出必须经过比赛仲裁与统一安全层。 -->
     <arg name="run_servo" default="true" />
     <arg name="image_topic" default="/usb_cam/image_raw" />
     <arg name="standoff_distance" default="0.30" />
     <node pkg="vision_control" type="blue_detector_node" name="blue_detector" output="screen">
         <param name="image_topic" value="$(arg image_topic)" />
         <rosparam>
-            hsv_low_h: 90
-            hsv_high_h: 130
+            hsv_low_h: 0
+            hsv_high_h: 10
             hsv_low_s: 80
             hsv_high_s: 255
             hsv_low_v: 50

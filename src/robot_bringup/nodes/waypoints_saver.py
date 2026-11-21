@@ -26,7 +26,13 @@ class WaypointSaver:
     def __init__(self):
         self.listener = tf.TransformListener()
         self.button_idx = rospy.get_param("~button_idx", 1)
-        self.anchor_tolerance = rospy.get_param("~anchor_tolerance", 1.0)
+        # 锚点容差：允许 B 点时刻与最近 Cartographer 轨迹节点的最大时间差。
+        # 树莓派算力低时轨迹节点可能间隔 >1s，1.0 会让 B 键频繁保存失败；
+        # 放宽到 3.0 以适配实际算力，代价是锚点重投影精度略降。
+        self.anchor_tolerance = rospy.get_param("~anchor_tolerance", 3.0)
+        # B 键保存失败时允许退化为"直接存当前 map->base_link 位姿"，
+        # 避免因轨迹节点稀疏导致完全无法标点。
+        self.allow_plain_fallback = rospy.get_param("~allow_plain_fallback", True)
         self.save_dir = rospy.get_param("~save_dir", "")
         self.pressed = False
         self.pub = rospy.Publisher("/vision_start_point", PoseStamped, latch=True, queue_size=1)
@@ -40,6 +46,42 @@ class WaypointSaver:
     def legacy_point_path(self):
         return os.path.join(self.save_dir, "vision_point.yaml")
 
+    def current_map_identity(self):
+        """读取当前地图身份 (map_id, map_sha256)，用于把 B 点绑定到具体地图版本。
+
+        建图会话中：map.pbstream/last_pose.yaml 仍是上一张图，不能读文件！
+        此时必须以 /mapping_asset 参数为准，sha256 暂时未知（返回 None，
+        由最终兜底转正时回填）。
+        非建图会话：优先用 last_pose.yaml（与地图配套写入），
+        缺失时退化为直接哈希 map.pbstream。
+        """
+        # 建图会话优先：参数由 auto_save_map 在建图启动时设置
+        session_id = rospy.get_param("/mapping_asset/map_id", "")
+        session_staging = rospy.get_param("/mapping_asset/staging_dir", "")
+        if session_id and session_staging:
+            return session_id, None
+
+        if not self.save_dir:
+            return None, None
+        map_path = os.path.join(self.save_dir, "map.pbstream")
+        pose_path = os.path.join(self.save_dir, "last_pose.yaml")
+        map_id = None
+        try:
+            with open(pose_path) as stream:
+                doc = yaml.safe_load(stream) or {}
+            map_id = doc.get("map_id")
+            sha = doc.get("map_sha256")
+            if sha:
+                return map_id, sha
+        except Exception:
+            pass
+        try:
+            if os.path.isfile(map_path):
+                return map_id, sha256_file(map_path)
+        except Exception:
+            pass
+        return map_id, None
+
     def load_legacy_point(self, reason):
         path = self.legacy_point_path()
         if os.path.isfile(path):
@@ -47,8 +89,30 @@ class WaypointSaver:
                 with open(path) as stream:
                     doc = yaml.safe_load(stream)
                 pose = validate_pose_dict(doc["vision_start_point"])
+                # 版本绑定校验：B 点必须属于当前这张地图，否则坐标会离谱地偏。
+                cur_id, cur_sha = self.current_map_identity()
+                point_id = doc.get("map_id")
+                point_sha = doc.get("map_sha256")
+                if not point_sha:
+                    # 只有 map_id 能证明来源（建图期间标点、尚未回填哈希）。
+                    if point_id and cur_id and point_id == cur_id:
+                        self.publish(pose)
+                        rospy.logwarn("%s；已回退发布 legacy 预备点（map_id 匹配，哈希待回填）：%s",
+                                      reason, path)
+                        return
+                    rospy.logwarn(
+                        "%s；legacy 预备点(%s)未绑定地图版本(map_id=%s 当前=%s)，"
+                        "坐标可能属于旧图，已拒绝发布。请在当前地图上按 B 键重新标点。",
+                        reason, path, point_id, cur_id)
+                    return
+                if cur_sha and point_sha != cur_sha:
+                    rospy.logwarn(
+                        "%s；legacy 预备点属于另一张地图(点=%s 当前=%s)，"
+                        "已拒绝发布。请在当前地图上按 B 键重新标点。",
+                        reason, point_sha[:12], cur_sha[:12])
+                    return
                 self.publish(pose)
-                rospy.logwarn("%s；已回退发布 legacy 预备点：%s", reason, path)
+                rospy.logwarn("%s；已回退发布 legacy 预备点（版本匹配）：%s", reason, path)
                 return
             except Exception as exc:
                 rospy.logerr("%s；且 legacy 预备点读取失败：%s", reason, exc)
@@ -137,8 +201,11 @@ class WaypointSaver:
             # 正式提交时才会变成可加载资产; 直接 Ctrl+C 退出的兜底只转正地图+位姿。
             # 双写保证"建图按 B -> 一键启动自动用"在两种退出方式下都成立。
             if self.save_dir:
+                # B 点必须绑定当前地图版本，否则下次换了图会被误当成有效点使用。
+                cur_id, cur_sha = self.current_map_identity()
                 legacy_doc = {
-                    "schema": 1, "map_id": "legacy", "valid": True,
+                    "schema": 1, "map_id": cur_id or "legacy", "valid": True,
+                    "map_sha256": cur_sha,
                     "vision_start_point": {"x": base[0], "y": base[1], "yaw": base[2]},
                 }
                 atomic_yaml(self.legacy_point_path(), legacy_doc)
@@ -147,18 +214,27 @@ class WaypointSaver:
             self.publish(base)
             rospy.loginfo("预备点草稿已保存：map_id=%s x=%.3f y=%.3f yaw=%.3f", map_id, *base)
         except Exception as exc:
-            rospy.logerr("预备点未保存：%s", exc)
+            # 锚点重投影失败（轨迹节点稀疏等）时退化为直接存当前位姿：
+            # 树莓派算力低会让轨迹节点间隔超过容差，不能让 B 键彻底不可用。
+            if self.allow_plain_fallback:
+                rospy.logwarn("预备点锚点重投影失败(%s)，退化为直接保存当前位姿", exc)
+                self.save_legacy_point()
+            else:
+                rospy.logerr("预备点未保存：%s", exc)
 
     def save_legacy_point(self):
         try:
             pose = self.current_pose()
+            cur_id, cur_sha = self.current_map_identity()
             doc = {
-                "schema": 1, "map_id": "legacy", "valid": True,
+                "schema": 1, "map_id": cur_id or "legacy", "valid": True,
+                "map_sha256": cur_sha,
                 "vision_start_point": {"x": pose[0], "y": pose[1], "yaw": pose[2]},
             }
             atomic_yaml(self.legacy_point_path(), doc)
             self.publish(pose)
-            rospy.loginfo("预备点已保存(legacy vision_point.yaml)：x=%.3f y=%.3f yaw=%.3f", *pose)
+            rospy.loginfo("预备点已保存：map_id=%s x=%.3f y=%.3f yaw=%.3f",
+                          cur_id or "legacy", *pose)
         except Exception as exc:
             rospy.logerr("预备点未保存：%s", exc)
 

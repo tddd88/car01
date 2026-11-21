@@ -1,0 +1,10 @@
+complete: true
+include_unfinished_submaps: true
+map_id: map-20261121T055057Z
+pose:
+  x: 0.10882208015305878
+  y: -0.1539794242306231
+  yaw: 0.02210725496130775
+schema: 1
+sha256: f5d462dfdd9778c43d9cde789a3356875cbf223cfef3d9cc75f1d4165a0c4e3f
+stamp: 1795240352.9041884

@@ -1,5 +1,82 @@
 # 更新日志 (Changelog)
 
+[2026-11-21 修复] B 键保存失败（锚点容差过严）+ 建图会话版本识别错误
+
+    现象：新建图后按多次 B 键，重启 localization 车不动，状态机停在 WAIT_READY
+
+    根因 A：B 键保存被锚点容差拒绝（主因）
+        * 日志：预备点未保存：最近轨迹节点相差 1.431s，超过 1.000s
+                （连续多次 1.4s / 2.4s / 3.1s 均被拒）
+        * 树莓派算力低时 Cartographer 轨迹节点稀疏，按 B 瞬间离最近节点
+          常超过 anchor_tolerance(1.0s) -> 全部保存失败 -> B 点文件从未更新
+        * 修复(waypoints_saver.py)：
+          - anchor_tolerance 默认 1.0 -> 3.0
+          - 新增 allow_plain_fallback（默认 true）：锚点重投影失败时退化为
+            直接保存当前 map->base_link 位姿，保证 B 键始终可用
+
+    根因 B：建图会话中 current_map_identity() 读到了上一张图的哈希
+        * 建图进行中 map.pbstream / last_pose.yaml 仍是上一张图的内容，
+          此时按 B 写入的 map_sha256 属于旧图，转正后永远不匹配
+        * 修复：
+          - current_map_identity() 优先读 /mapping_asset 参数（建图会话标识），
+            此时 sha256 返回 None
+          - auto_save_map.py 新增 _backfill_vision_point()：兜底转正后用
+            本会话 map_id + 最终 sha256 回填 vision_point.yaml
+          - waypoints_saver.load_legacy_point()：sha256 缺失但 map_id 与当前会话
+            一致时允许发布（哈希待回填），其余情况仍拒绝
+
+    重要提醒：
+        * 建图后必须"先按 B 标点、再 Ctrl+C 退出"，转正时才来得及回填哈希
+        * 已存在的 vision_point.yaml（map_id=map-20261121T055349Z）属于旧图，
+          需要在当前图上重新按 B 标点，不要手工修改哈希（会导致导航到错误坐标）
+
+
+[2026-11-21] B 点绑定地图版本 + 修复停车后不转圈（瞬间跳 FAULT）
+
+    问题现象（2026-11-21 14:05 那次 bringup_localization）：
+        1. 发布的 B 点与建图预设点有偏差
+        2. 到达停车点后直接不转圈，状态机瞬间跳 FAULT
+
+    根因 1：B 点未绑定地图版本
+        * vision_point.yaml 里是 map_id: legacy 的旧坐标 (1.949, 0.150)
+        * 当前地图是 map-20261121T055349Z，两者不配套
+        * 日志：没有 active bundle -> 已回退发布 legacy 预备点
+        * 直接 roslaunch bringup_mapping.launch + Ctrl+C 走兜底转正，
+          只产 map.pbstream/last_pose.yaml，不产 bundles/active.yaml，
+          于是 waypoints_saver 回退到 legacy 点
+
+    修复 1（robot_bringup/nodes/waypoints_saver.py）：
+        * load_legacy_point() 增加版本校验：legacy 点必须带 map_sha256 且与当前地图一致，
+          否则拒绝发布并提示现场按 B 键重标
+        * save_point()/save_legacy_point() 写入时记录 map_id + map_sha256
+        * 新增 current_map_identity()：优先读 last_pose.yaml 的 map_id/map_sha256，
+          缺失则直接哈希 map.pbstream
+
+    根因 2：搜索/视觉状态瞬间跳转耗尽重试次数
+        * 状态流转（间隔仅 50ms）：NAVIGATING -> SEARCHING -> VISUAL -> FAULT
+        * target_first_time_ 在导航途中被反复刷新，导航结束时
+          (now - target_first_time_) 早已超过 target_stable_time(0.4s)，
+          进入 SEARCHING 第一次 tick 就误判"蓝目标已稳定锁定"，一秒都没转
+        * 进 VISUAL 时视觉状态尚未送达（status_fresh=false），立刻被判目标丢失
+          并 beginSearch()，第二次 beginSearch() 使 search_attempts_ 达上限 2 -> FAULT
+
+    修复 2（decision/src/race_state_machine_node.cpp）：
+        * beginSearch()：搜索开始时若目标新鲜，重置 target_first_time_，
+          确保"稳定锁定"从搜索开始计时
+        * 新增 visual_grace_timeout 参数（默认 1.0s）：进入 VISUAL 后等待视觉首帧状态，
+          宽限期内 status 未就绪不算目标丢失，不消耗重试次数
+        * setState() 进入 VISUAL 时记录 visual_entered_ 并清空旧的
+          vision_status 新鲜度，避免拿上一轮数据判定 LOST
+
+    编译验证：decision 包编译通过，devel/lib/decision/race_state_machine_node
+              时间戳已更新（14:23）；waypoints_saver.py py_compile 通过
+
+    注意事项：
+        * 旧 vision_point.yaml（无 map_sha256）现在会被拒绝发布，
+          需要在当前地图上重新按 B 键标点
+        * 建图仍建议走 mapping_session.sh 正式流程以生成 active.yaml
+
+
 [2026-10-18] 串口零速不发 + arbiter 失联锁止自动解除
 
     stm32_bridge.cpp sendTwist()：

@@ -38,6 +38,8 @@ class RaceStateMachine {
     pnh_.param("search_max_attempts", search_max_attempts_, 1);
     pnh_.param("target_stable_time", target_stable_time_, 0.4);
     pnh_.param("reached_stable_time", reached_stable_time_, 0.8);
+    // 进入 VISUAL 后等待视觉首帧状态的宽限期，避免"状态未就绪"被误判为目标丢失。
+    pnh_.param("visual_grace_timeout", visual_grace_timeout_, 1.0);
 
     waypoint_sub_ = nh_.subscribe("/vision_start_point", 1, &RaceStateMachine::waypointCb, this);
     nav_vel_sub_ = nh_.subscribe("/cmd_vel_nav", 5, &RaceStateMachine::navVelCb, this);
@@ -148,6 +150,12 @@ class RaceStateMachine {
   void setState(State next, const std::string& reason) {
     if (state_ == next) return;
     state_ = next; publishState(); ROS_INFO("比赛状态 -> %s：%s", stateName(), reason.c_str());
+    if (next == State::VISUAL) {
+      visual_entered_ = ros::Time::now();
+      // 进入视觉前清空上一次的状态/速度新鲜度，避免用旧数据判定 LOST。
+      vision_status_recv_time_ = ros::Time();
+      vision_status_stamp_ = ros::Time();
+    }
   }
   void sendGoal() {
     move_base_msgs::MoveBaseGoal goal; goal.target_pose = waypoint_; goal.target_pose.header.stamp = ros::Time::now();
@@ -156,6 +164,10 @@ class RaceStateMachine {
   }
   void beginSearch() {
     search_started_ = ros::Time::now(); ++search_attempts_; search_accum_angle_ = 0.0;
+    // 重置目标稳定计时起点。
+    // 否则导航途中一直可见的蓝纸会让 target_first_time_ 停在很早的时刻，
+    // 进入 SEARCHING 的第一次 tick 就误判"已稳定锁定"，搜索旋转一秒都没执行。
+    if (targetFresh()) target_first_time_ = ros::Time::now();
     if (!tfFresh(&last_search_yaw_)) { setState(State::FAULT, "搜索开始时 TF 无效"); return; }
     setState(State::SEARCHING, "导航成功，开始有界旋转扫描");
   }
@@ -217,6 +229,13 @@ class RaceStateMachine {
       }
       case State::VISUAL: {
         const bool status_fresh = fresh(vision_status_recv_time_, vision_cmd_timeout_) && fresh(vision_status_stamp_, target_timeout_);
+        // 刚进入 VISUAL 时视觉状态尚未送达属正常，给一个宽限期等待首帧，
+        // 避免"状态还没到"被当成目标丢失，瞬间消耗重试次数导致直接 FAULT。
+        const bool visual_grace = !reached_since_.isZero() ? false :
+            (ros::Time::now() - visual_entered_).toSec() < visual_grace_timeout_;
+        if (!status_fresh && visual_grace && targetFresh() && vision_status_ != "FAULT") {
+          stop(); break;
+        }
         if (!targetFresh() || !status_fresh || vision_status_ == "LOST") {
           stop(); if (search_attempts_ < search_max_attempts_) beginSearch(); else setState(State::FAULT, "视觉目标丢失且重搜次数已用尽"); break;
         }
@@ -275,6 +294,8 @@ class RaceStateMachine {
   bool auto_start_, allow_visual_during_navigation_;
   double readiness_timeout_, tf_timeout_, nav_cmd_timeout_, vision_cmd_timeout_, target_timeout_, goal_timeout_;
   double search_speed_, search_max_time_, search_max_angle_, target_stable_time_, reached_stable_time_;
+  double visual_grace_timeout_;
+  ros::Time visual_entered_;
   int search_max_attempts_, search_attempts_{0};
   double search_accum_angle_{0.0}, last_search_yaw_{0.0};
 };
