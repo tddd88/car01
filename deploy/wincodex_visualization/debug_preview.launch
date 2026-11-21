@@ -1,0 +1,14 @@
+<launch><group ns="wincodex_visualization/detector">
+<param name="image_topic" value="/wincodex_visualization/camera/usb_cam/image_raw"/>
+<param name="hsv_low_h" value="90"/><param name="hsv_high_h" value="130"/>
+<param name="hsv_low_s" value="80"/><param name="hsv_high_s" value="255"/>
+<param name="hsv_low_v" value="50"/><param name="hsv_high_v" value="255"/>
+<param name="min_area" value="800"/><param name="morph_kernel" value="5"/>
+<node pkg="vision_control" type="blue_detector_node" name="blue_detector_preview" output="screen">
+<remap from="/blue_target" to="/wincodex_visualization/blue_target"/>
+<!-- 新源时间戳检测结果仍隔离，预览不能进入比赛控制链。 -->
+<remap from="/vision/target" to="/wincodex_visualization/vision_target"/>
+<remap from="/rgb/blue_target_debug_img" to="/wincodex_visualization/blue_target_debug_img"/>
+</node></group>
+<param name="/wincodex_visualization/blue_target_debug_img/compressed/jpeg_quality" value="65"/>
+</launch>

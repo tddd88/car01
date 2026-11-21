@@ -1,8 +1,8 @@
 obstacle_range: 2.5
 raytrace_range: 3.0
 
-footprint: [[-0.2, -0.15], [-0.2, 0.15], [0.2, 0.15], [0.2, -0.15]]
-#robot_radius: 0.25
+footprint: [[-0.175, -0.11], [-0.175, 0.11], [0.175, 0.11], [0.175, -0.11]]
+# footprint 已按实车 35cm x 22cm 配置，不使用 robot_radius
 
 # 注意：inflation_radius 已在 global_costmap_params(0.45) 与 local_costmap_params(0.2) 中单独定义，
 # 此处不再重复，避免被覆盖产生歧义。

@@ -5,13 +5,19 @@ TebLocalPlannerROS:
 
   # Trajectory
   teb_autosize: True
-  dt_ref: 0.3
+  dt_ref: 0.4
   dt_hysteresis: 0.1
 
   # Robot
-  max_vel_x: 0.4
+  # 2026-10-25 ZCode: 0.4 -> 1.8 (用户要求放开)。
+  # 注意: 32 侧固件历史限幅 MAX_CMD_VX=500mm/s, 实车能否跑到 1.8 取决于 32 是否放行;
+  # 且 acc_lim_x=0.5 时加速到 1.8 需 3.6s, 短路线跑不满。
+  max_vel_x: 1.8
   max_vel_x_backwards: 0.2
-  max_vel_y: 0.2
+  # 2026-10-07 ZCode: 导航规划禁用横移。麦轮横移靠滚子 45° 传动, 地面摩擦不足时
+  # 对角轮(左前+右后 / 右前+左后)极易打滑, 且横移速度上限远低于前进。
+  # 盲搜/视觉伺服阶段的横移由状态机/视觉节点直接下发 /cmd_vel, 不经过 TEB, 不受此项影响。
+  max_vel_y: 0.0
   max_vel_theta: 0.5
   acc_lim_x: 0.5
   acc_lim_y: 0.5
@@ -20,7 +26,10 @@ TebLocalPlannerROS:
   # Mecanum configuration
   min_turning_radius: 0.0
   wheelbase: 0.0
-  weight_kinematics_nh: 1 # 全向移动支持
+  # 2026-10-07 ZCode: 恢复非完整约束(原来是 0 = 全向自由规划)。
+  # 之前 TEB 规划出"车身侧过去斜着走"的蟹行轨迹, 正是打滑的主要来源;
+  # 现在规划为"原地转向对准路径 -> 前进", 走最快轴且不打滑。
+  weight_kinematics_nh: 1000
 
   # GoalTolerance
   xy_goal_tolerance: 0.15
@@ -34,10 +43,15 @@ TebLocalPlannerROS:
   obstacle_poses_affected: 30
 
   # Optimization
-  no_inner_iterations: 5
-  no_outer_iterations: 4
+  no_inner_iterations: 4
+  no_outer_iterations: 3
   optimization_activate: True
   optimization_verbose: False
+  # 2026-10-07 ZCode: 树莓派算力不足(实测 move_base 单独吃满一个核, /cmd_vel_nav 只有 1.1Hz)。
+  # homotopy 多拓扑并行优化是 TEB 最大的 CPU 消耗项, noetic 默认开启, 必须关闭。
+  enable_homotopy_class_planning: False
+  # 缩短每次优化的轨迹前瞻长度, 降低单周期耗时(场地小, 2m 足够)
+  max_global_plan_lookahead_distance: 2.0
 
   weight_max_vel_x: 2
   weight_max_vel_y: 2
@@ -45,5 +59,6 @@ TebLocalPlannerROS:
   weight_acc_lim_x: 1
   weight_acc_lim_y: 1
   weight_acc_lim_theta: 1
-  weight_kinematics_forward_drive: 1
+  # 惩罚倒车, 让 TEB 优先把车头转向目标方向再前进, 而不是倒着走
+  weight_kinematics_forward_drive: 1.0
   weight_obstacle: 50

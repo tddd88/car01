@@ -4,8 +4,9 @@
     <!-- 1. 底层硬件、TF、雷达、摄像头 -->
     <include file="$(find robot_bringup)/launch/bringup.launch" />
 
-    <!-- 2. Cartographer 纯定位（加载已建图 pbstream） -->
+    <!-- 2. Cartographer 纯定位（加载已建图 pbstream，原点=建图起始点） -->
     <arg name="pbstream" default="$(find robot_slam)/map/map.pbstream" />
+    <arg name="active_file" default="$(find robot_slam)/map/bundles/active.yaml" />
     <include file="$(find robot_slam)/launch/localization.launch">
         <arg name="pbstream" value="$(arg pbstream)" />
     </include>
@@ -17,5 +18,7 @@
     <include file="$(find vision_control)/launch/vision.launch" />
 
     <!-- 5. 决策状态机 + 预备点保存（总控 /cmd_vel） -->
-    <include file="$(find decision)/launch/race.launch" />
+    <include file="$(find decision)/launch/race.launch">
+        <arg name="active_file" value="$(arg active_file)" />
+    </include>
 </launch>

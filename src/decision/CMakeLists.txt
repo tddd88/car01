@@ -9,11 +9,15 @@ project(decision)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   actionlib
+  diagnostic_msgs
   geometry_msgs
   move_base_msgs
   roscpp
   sensor_msgs
   std_msgs
+  std_srvs
+  tf2
+  tf2_ros
 )
 
 ## System dependencies are found with CMake's conventions

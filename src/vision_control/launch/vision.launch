@@ -1,10 +1,10 @@
 <launch>
-    <!-- 视觉控制：蓝色靶标检测 + 视觉伺服 -->
-
+    <!-- 蓝色靶标：检测和调试画面；控制输出必须经过比赛仲裁与统一安全层。 -->
     <arg name="run_servo" default="true" />
-
-    <!-- 蓝色检测节点（HSV 参数可在下方 rosparam 现场调整） -->
+    <arg name="image_topic" default="/usb_cam/image_raw" />
+    <arg name="standoff_distance" default="0.30" />
     <node pkg="vision_control" type="blue_detector_node" name="blue_detector" output="screen">
+        <param name="image_topic" value="$(arg image_topic)" />
         <rosparam>
             hsv_low_h: 90
             hsv_high_h: 130
@@ -16,17 +16,44 @@
             morph_kernel: 5
         </rosparam>
     </node>
-
-    <!-- 视觉伺服节点（PID 参数） -->
     <node if="$(arg run_servo)" pkg="vision_control" type="visual_servo_node" name="visual_servo" output="screen">
+        <!-- 距离以 base_link 中心到终点墙为准，须结合车体尺寸和现场标定。 -->
+        <param name="standoff_distance" value="$(arg standoff_distance)" />
         <rosparam>
-            kp_x: 0.5
-            kp_y: 1.0
-            kp_yaw: 1.5
+            kp_x: 0.35
+            kp_y: 0.45
+            kp_yaw: 0.8
+            max_vx: 0.10
+            max_vy: 0.08
+            max_wz: 0.20
+            max_reverse: 0.03
+            near_speed: 0.04
+            near_distance: 0.15
+            accel_x: 0.15
+            accel_y: 0.20
+            accel_yaw: 0.40
+            distance_tolerance: 0.015
+            center_tolerance: 0.025
+            yaw_tolerance: 0.04
+            stable_time: 0.8
+            stable_frames: 5
+            target_timeout: 0.3
+            scan_timeout: 0.3
+            publish_rate: 20.0
+            base_frame: base_link
+            scan_topic: /scan
+            wall_front_sector: 0.50
+            wall_max_range: 3.0
+            wall_inlier_tolerance: 0.025
+            wall_max_rmse: 0.020
+            wall_min_width: 0.25
+            wall_min_points: 8
+            wall_min_inlier_ratio: 0.65
+            wall_max_yaw: 0.70
+            center_x: 0.5
+            lateral_sign: 1.0
+            allow_area_fallback: false
             target_area: 0.30
-            max_vx: 0.25
-            max_vy: 0.30
-            max_wz: 0.60
         </rosparam>
     </node>
 </launch>

@@ -1,0 +1,5 @@
+<launch><group ns="wincodex_visualization">
+<param name="robot_description" textfile="$(find simulation)/urdf/simulation.urdf"/>
+<node pkg="joint_state_publisher" type="joint_state_publisher" name="preview_joint_state_publisher"><param name="rate" value="5"/></node>
+<node pkg="robot_state_publisher" type="robot_state_publisher" name="preview_robot_state_publisher"><param name="publish_frequency" value="5"/></node>
+</group></launch>

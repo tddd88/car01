@@ -6,8 +6,8 @@
     <!-- 底盘最终执行话题为 /cmd_vel，move_base 输出改名为 /cmd_vel_nav 交给状态机调度 -->
     <remap from="cmd_vel" to="cmd_vel_nav"/>
 
-    <param name="controller_frequency" value="10.0" />
-    <param name="planner_frequency" value="2.0" />
+    <param name="controller_frequency" value="5.0" />
+    <param name="planner_frequency" value="1.0" />
     <param name="conservative_reset_dist" value="3.0" />
 
     <!-- 代价图参数 -->

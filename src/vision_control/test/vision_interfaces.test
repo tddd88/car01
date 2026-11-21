@@ -1,0 +1,33 @@
+<launch>
+    <!-- 此测试只连接由测试命令创建的11402 master，无实体驱动。 -->
+    <param name="hsv_low_h" value="90" />
+    <param name="hsv_high_h" value="100" />
+    <param name="min_area" value="10000" />
+    <node pkg="vision_control" type="blue_detector_node" name="blue_detector_test" output="screen">
+        <param name="image_topic" value="/test/image" />
+        <param name="hsv_low_h" value="110" />
+        <param name="hsv_high_h" value="130" />
+        <param name="min_area" value="100" />
+        <param name="morph_kernel" value="1" />
+    </node>
+    <group ns="legacy_preview">
+        <param name="image_topic" value="/test/image" />
+        <param name="hsv_low_h" value="110" />
+        <param name="hsv_high_h" value="130" />
+        <param name="min_area" value="200" />
+        <param name="morph_kernel" value="1" />
+        <node pkg="vision_control" type="blue_detector_node" name="preview" output="screen">
+            <remap from="/vision/target" to="/test/preview_target" />
+            <remap from="/blue_target" to="/test/preview_legacy" />
+            <remap from="/rgb/blue_target_debug_img" to="/test/preview_debug" />
+        </node>
+    </group>
+    <node pkg="tf2_ros" type="static_transform_publisher" name="test_laser_tf"
+          args="0.05 -0.02 0.25 0.30 0 0 base_link test_laser" />
+    <node pkg="vision_control" type="visual_servo_node" name="visual_servo_test" output="screen">
+        <param name="scan_topic" value="/test/scan" />
+        <param name="stable_time" value="0.8" />
+        <param name="stable_frames" value="5" />
+    </node>
+    <test pkg="vision_control" type="test_vision_interfaces.py" test-name="vision_interfaces" name="vision_interfaces" time-limit="65" />
+</launch>

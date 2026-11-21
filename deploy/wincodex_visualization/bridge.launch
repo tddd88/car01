@@ -1,0 +1,11 @@
+<launch><group ns="wincodex_visualization">
+<include file="$(find foxglove_bridge)/launch/foxglove_bridge.launch">
+<arg name="address" value="192.168.3.151"/>
+<arg name="num_threads" value="2"/>
+<arg name="capabilities" value="[parameters,parametersSubscribe,connectionGraph,assets]"/>
+<arg name="client_topic_whitelist" value="[]"/>
+<arg name="service_whitelist" value="[]"/>
+<arg name="topic_whitelist" value="['^/(scan|odom_raw|tf|tf_static|joint_states|map|wincodex_visualization/.*|move_base/.*|rgb/.*|usb_cam/.*|vision/.*|vision_debug/.*|target_detected|target_centroid|parking_error|diagnostics|rosout_agg)$']"/>
+<arg name="param_whitelist" value="['^/(robot_description|wincodex_visualization/robot_description)$']"/>
+<arg name="asset_uri_allowlist" value="['^package://simulation/(meshes/[A-Za-z0-9_]+[.](STL|stl)|urdf/simulation[.]urdf)$']"/>
+</include></group></launch>

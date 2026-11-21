@@ -30,17 +30,32 @@ struct __attribute__((packed)) RxPacket {
 
 serial::Serial ser;
 
-void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
+// 统一的串口发送：Twist 或 TwistStamped 中的 twist 部分都走这里
+// 下发规则（与 joy_repeat / cmd_vel_repeat 一致）：
+//   非零速度：每次收到都发（保活底盘看门狗）
+//   零速：只在"非零→零"时发一次停车指令，之后静默不刷
+//   这样上游 arbiter 即使 25Hz 持续发零，串口 TX 也不会一直闪
+static bool last_was_zero_ = true;  // 初始视为零，确保启动后第一帧必发
+
+static void sendTwist(const geometry_msgs::Twist& msg) {
     if (!ser.isOpen()) return;
+
+    const bool is_zero = (std::abs(msg.linear.x) < 1e-6 &&
+                          std::abs(msg.linear.y) < 1e-6 &&
+                          std::abs(msg.angular.z) < 1e-6);
+
+    // 连续零速：只发第一次，之后静默
+    if (is_zero && last_was_zero_) return;
+    last_was_zero_ = is_zero;
 
     TxPacket tx;
     tx.header1 = 0xAA;
     tx.header2 = 0x55;
     tx.type = 0x01;
     // float m/s -> int16 mm/s
-    tx.vx  = msg->linear.x * 1000;
-    tx.vy  = msg->linear.y * 1000;
-    tx.vth = msg->angular.z * 1000;
+    tx.vx  = msg.linear.x * 1000;
+    tx.vy  = msg.linear.y * 1000;
+    tx.vth = msg.angular.z * 1000;
     tx.tail = 0xEE;
 
     try {
@@ -50,6 +65,18 @@ void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
     } catch (const serial::IOException& e) {
         ROS_WARN_THROTTLE(2.0, "cmd_vel write IO error: %s", e.what());
     }
+}
+
+// 兼容两种速度类型：
+//   geometry_msgs/Twist          （老链路：laser_safety_node 直接输出）
+//   geometry_msgs/TwistStamped   （新链路：cmd_vel_arbiter/passthrough 输出）
+// 类型不匹配会被 ROS 静默丢弃，因此用两个独立订阅避免断层。
+void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg) {
+    sendTwist(*msg);
+}
+
+void cmdVelStampedCallback(const geometry_msgs::TwistStamped::ConstPtr& msg) {
+    sendTwist(msg->twist);
 }
 
 int main(int argc, char** argv) {
@@ -68,6 +95,9 @@ int main(int argc, char** argv) {
     nh_private.param<bool>("publish_tf", publish_tf, false);
 
     ros::Subscriber cmd_sub = nh.subscribe("cmd_vel", 50, cmdVelCallback);
+    // 新链路（TwistStamped）：订阅 /cmd_vel_auto_stamped，由 passthrough relay 提供
+    ros::Subscriber cmd_stamped_sub = nh.subscribe(
+        "cmd_vel_auto_stamped", 50, cmdVelStampedCallback);
     // V4 ：仅发布 odom_raw 供 Cartographer 的后端优化使用，不再发布 IMU 数据
     ros::Publisher odom_pub = nh.advertise<nav_msgs::Odometry>("odom_raw", 50);
     

@@ -1,15 +1,32 @@
 <launch>
-    <!-- 1. 启动所有底层硬件和TF（含雷达、摄像头、手柄遥控、激光安全避障） -->
-    <include file="$(find robot_bringup)/launch/bringup.launch" />
+    <arg name="map_id" default="" />
+    <arg name="staging_dir" default="" />
+    <arg name="final_state_file" default="/tmp/car01_mapping_final.pbstream" />
+    <!-- 1. 启动所有底层硬件和TF（含雷达、摄像头、手柄遥控）。
+         建图时默认关闭雷达安全避障（手柄直通 cmd_vel），可通过 enable_laser_safety:=true 开启。 -->
+    <include file="$(find robot_bringup)/launch/bringup.launch">
+        <arg name="enable_laser_safety" value="false" />
+        <arg name="start_camera" value="false" />
+    </include>
 
     <!-- 2. 启动 Cartographer 建图 (全家桶包含建图和栅格地图生成) -->
-    <include file="$(find robot_slam)/launch/mapping.launch" />
+    <include file="$(find robot_slam)/launch/mapping.launch">
+        <arg name="save_state_filename" value="$(arg final_state_file)" />
+    </include>
 
-    <!-- 3. 加入自动保存地图的监控脚本（当launch被ctrl+c结束时保存地图） -->
+    <!-- 3. 版本化 bundle：周期快照不结束轨迹；最终提交必须使用 mapping_session.sh 两阶段入口。 -->
     <node pkg="robot_bringup" type="auto_save_map.py" name="auto_save_map" output="screen">
-        <param name="map_file" value="$(find robot_slam)/map/map.pbstream" />
+        <param name="bundle_root" value="$(find robot_slam)/map/bundles" />
+        <param name="save_interval" value="5.0" />
+        <param name="map_id" value="$(arg map_id)" />
+        <param name="staging_dir" value="$(arg staging_dir)" />
+        <param name="final_state_file" value="$(arg final_state_file)" />
     </node>
 
-    <!-- 4. 自动保存路径预备点 (手柄B键) -->
-    <node pkg="robot_bringup" type="waypoints_saver.py" name="waypoints_saver" output="screen" />
+    <!-- 4. 自动保存路径预备点 (手柄B键)。
+         2026-10-25 ZCode: 补 save_dir。建图按 B 除 bundle 草稿外同步写
+         map/vision_point.yaml(legacy), 保证 Ctrl+C 兜底退出后比赛入口也能读到。 -->
+    <node pkg="robot_bringup" type="waypoints_saver.py" name="waypoints_saver" output="screen">
+        <param name="save_dir" value="$(find robot_slam)/map" />
+    </node>
 </launch>

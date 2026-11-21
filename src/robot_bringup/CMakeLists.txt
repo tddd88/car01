@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(robot_bringup)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   sensor_msgs
   std_msgs
+  std_srvs
   tf
   serial
 )
@@ -128,6 +129,9 @@ target_link_libraries(stm32_bridge ${catkin_LIBRARIES})
 
 add_executable(joy_repeat_node src/joy_repeat_node.cpp)
 target_link_libraries(joy_repeat_node ${catkin_LIBRARIES})
+
+add_executable(cmd_vel_arbiter_node src/cmd_vel_arbiter_node.cpp)
+target_link_libraries(cmd_vel_arbiter_node ${catkin_LIBRARIES})
 
 add_executable(laser_safety_node src/laser_safety_node.cpp)
 target_link_libraries(laser_safety_node ${catkin_LIBRARIES})

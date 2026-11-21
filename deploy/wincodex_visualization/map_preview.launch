@@ -1,0 +1,1 @@
+<launch><node pkg="map_server" type="map_server" name="wincodex_map_preview" args="/home/ubuntu/car01/deploy/wincodex_visualization/map/pbstream_preview.yaml"><remap from="map" to="/wincodex_visualization/map_preview"/><remap from="map_metadata" to="/wincodex_visualization/map_preview_metadata"/></node></launch>

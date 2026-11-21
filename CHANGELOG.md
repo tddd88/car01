@@ -1,5 +1,80 @@
 # 更新日志 (Changelog)
 
+[2026-10-18] 串口零速不发 + arbiter 失联锁止自动解除
+
+    stm32_bridge.cpp sendTwist()：
+        * 连续零速只发一次停车指令，之后不再往串口写（非零仍每条都发）
+        * 原因：arbiter 以 ~12.5Hz 持续发布零速，bridge 逐条转串口，导致静止时 TX
+          持续闪烁、电机控制器持续收到零速指令产生阻尼
+    cmd_vel_arbiter_node.cpp joyCb()：
+        * 新增自动解除"失联锁止"：手柄恢复且使能键松开、摇杆全部归中时清 lock_
+        * 人工 /control/stop 的锁止(operator_stop_)不自动解除，仍须显式 reset
+        * 原因：原逻辑 manual_used_ 后 /joy 静默 >0.5s 即永久 lock_，而 USB 手柄
+          接收器偶发掉线（实测 xpad usb_submit_urb failed → disconnect）会正好触发，
+          导致"手柄明明在、车却完全没反应"且必须手工 reset 才能恢复
+
+    排查要点（供后续参考）：
+        * 手柄控制失效先看 `ls /dev/input/js*` + `lsusb | grep 045e` + `dmesg | grep -i xpad`
+        * 若 systemd 自启服务与手动 roslaunch 同时运行，同名节点(joystick/
+          teleop_twist_joy/cmd_vel_arbiter_node/stm32_bridge)会互相顶替并把对方杀掉，
+          表现为"服务 active 但只剩 stm32_bridge、手柄无响应"
+        * 手动建图/导航前务必 `sudo systemctl stop bringup_auto.service`
+
+
+[2026-10-16] 地图保存兜底转正 + arbiter 零速只发一次
+
+    auto_save_map.py 新增 fallback_promote()：
+        * 问题：WinCodex 两阶段提交设计下，直接 roslaunch bringup_mapping.launch + Ctrl+C
+          只写 staging 周期快照，不生成 active.yaml，导致定位仍加载旧图
+        * 修复：节点退出时若未走正式 finalize，自动校验 staging 快照 SHA256 后转正：
+          备份旧 map.pbstream.bak-<时间戳> → 快照替换 map.pbstream → 尽力写 last_pose.yaml
+        * 正式 finalize（mapping_session.sh）路径不受影响，且优先级更高
+        * 现在任何退出方式都保证"刚建的图"可用；正式流程仍提供更精确的
+          最终优化 + 锚点重投影，建议比赛仍走 mapping_session.sh
+    cmd_vel_arbiter_node.cpp 下发规则改为（与 cmd_vel_repeat_node 一致）：
+        * 非零速度 25Hz 持续发
+        * 零速只在"非零→零"或"从静默恢复"时发一次，之后静默让权
+        * 失联/锁止恢复时必先发一帧零，确保底盘不残留旧速度
+        * 原因：此前 tick() 25Hz 无条件发布，零速也持续刷，与"0 只发一次"约定不符
+
+
+[2026-10-16] 开机自启关闭雷达避障 + 安全节点加速度限制放宽
+
+    bringup_auto.launch 重构为 include bringup.launch（enable_laser_safety=false）：
+        * 开机自启不再启动 laser_safety_node，手柄直通 cmd_vel
+        * 原因：前面有障碍物时其他方向也动不了（安全节点全向抑制）
+        * 需要避障时用 bringup.launch / nav_test.launch
+    bringup.launch 的 laser_safety_node（导航时启动）：
+        * max_accel_x/y/yaw 0.4/0.4/0.8 → 10.0（实际不限制加速度）
+        * max_vx/vy/wz 0.8/0.5/0.6 → 1.5/1.5/2.5（放宽速度上限，避免二次限速）
+        * 原因：安全节点内置加速度斜坡和速度钳制会拖慢响应；TEB 已有 costmap 避障，
+              安全节点只做碰撞兜底，不应二次限制速度/加速度
+        * 注意：不能设 0（节点参数校验 params_ok_ 要求 >0），设大值等效关闭
+
+
+[2026-10-16] 建图/导航雷达安全避障开关分离
+
+    bringup.launch 新增 enable_laser_safety 参数（默认 true）：
+        * 开启时：arbiter → laser_safety_node → /cmd_vel（正常安全避障链路）
+        * 关闭时：arbiter → topic_tools/relay 直连 /cmd_vel（手柄直通，无避障）
+    bringup_mapping.launch：默认 enable_laser_safety=false（建图时手柄直通，和以前一样）
+        * 可通过 roslaunch robot_bringup bringup_mapping.launch enable_laser_safety:=true 手动开启
+    nav_test.launch / bringup_localization.launch：默认 enable_laser_safety=true（导航时开启避障）
+    原因：建图时手柄遥控需要直接控制，安全节点会干扰；导航时 TEB 有 costmap 避障，
+          但到达导航点后自转找目标+视觉伺服停车阶段没有 TEB，需要激光安全兜底（Codex 建议）。
+
+
+[2026-10-15] 外部 AI 修复轮次已部署（WinCodex/WorkBuddy 续接，勿误回退）
+
+    本工作树包含 2026-10-13~15 由外部 AI 完成的大规模修复（未提交，叠加在你既有改动之上，基线 aa79e09）：
+        * 统一速度安全链：/cmd_vel_auto → cmd_vel_arbiter → laser_safety → /cmd_vel（唯一发布者）；手柄链路同入仲裁
+        * 比赛状态机：自动 goal / 有界旋转搜索 / 视觉对中停车（decision/race_state_machine_node）
+        * 地图资产事务（map_id/原子写）+ Cartographer 相对初始位姿（robot_bringup/nodes/asset_bundle.py、initial_pose_loader.py）
+        * 视觉：/vision/target stamped 接口 + 显式 REACHED 稳态判定（vision_control）
+    修改任何 src/ 文件前先读 wincodexchangelog.md（2026-10-15 条目），含完整文件清单与回退方法；
+    隔离工作树与完整备份在 /home/ubuntu/car01_wincodex_fix_20261013/。
+
+
 [2026-09-08] 麦轮横移漂移补偿（本轮）
 
     新增 chassis_corrector_node.cpp:

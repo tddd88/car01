@@ -3,99 +3,90 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/Vector3Stamped.h>
+#include <vision_control/parameters.h>
+#include <algorithm>
 
 class BlueDetector {
 public:
-    BlueDetector() : it_(nh_) {
-        // 订阅 usb_cam 原始图像话题
-        std::string image_topic;
-        nh_.param<std::string>("image_topic", image_topic, "/usb_cam/image_raw");
-        image_sub_ = it_.subscribe(image_topic, 1, &BlueDetector::imageCb, this);
-        target_pub_ = nh_.advertise<geometry_msgs::Point>("/blue_target", 1);
+    BlueDetector() : private_nh_("~"), it_(nh_) {
+        using vision_control::parameter;
+        const std::string topic = parameter(private_nh_, nh_, "image_topic", std::string("/usb_cam/image_raw"));
+        image_sub_ = it_.subscribe(topic, 1, &BlueDetector::imageCb, this);
+        legacy_pub_ = nh_.advertise<geometry_msgs::Point>("/blue_target", 1);
+        target_pub_ = nh_.advertise<geometry_msgs::Vector3Stamped>("/vision/target", 1);
         debug_pub_ = it_.advertise("/rgb/blue_target_debug_img", 1);
-
-        // ---- 可调 HSV 蓝色范围（现场可用 dynamic_reconfigure 或 rosparam 调整）----
-        nh_.param("hsv_low_h", low_h_, 90);
-        nh_.param("hsv_high_h", high_h_, 130);
-        nh_.param("hsv_low_s", low_s_, 80);
-        nh_.param("hsv_high_s", high_s_, 255);
-        nh_.param("hsv_low_v", low_v_, 50);
-        nh_.param("hsv_high_v", high_v_, 255);
-        nh_.param("min_area", min_area_, 800);   // 最小像素面积阈值
-        nh_.param("morph_kernel", morph_kernel_, 5); // 开闭运算核大小
+        low_h_ = parameter(private_nh_, nh_, "hsv_low_h", 90);
+        high_h_ = parameter(private_nh_, nh_, "hsv_high_h", 130);
+        low_s_ = parameter(private_nh_, nh_, "hsv_low_s", 80);
+        high_s_ = parameter(private_nh_, nh_, "hsv_high_s", 255);
+        low_v_ = parameter(private_nh_, nh_, "hsv_low_v", 50);
+        high_v_ = parameter(private_nh_, nh_, "hsv_high_v", 255);
+        min_area_ = parameter(private_nh_, nh_, "min_area", 800);
+        morph_kernel_ = parameter(private_nh_, nh_, "morph_kernel", 5);
+        if (low_h_ < 0 || high_h_ > 179 || low_h_ > high_h_ ||
+            low_s_ < 0 || high_s_ > 255 || low_s_ > high_s_ ||
+            low_v_ < 0 || high_v_ > 255 || low_v_ > high_v_ ||
+            min_area_ < 0 || morph_kernel_ < 1 || morph_kernel_ > 31) {
+            throw std::runtime_error("蓝色 HSV/面积/形态学参数无效，拒绝启动检测");
+        }
+        kernel_ = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(morph_kernel_, morph_kernel_));
+        ROS_INFO("蓝色检测输入 %s，实际 HSV=[%d,%d]/[%d,%d]/[%d,%d] min_area=%d",
+                 topic.c_str(), low_h_, high_h_, low_s_, high_s_, low_v_, high_v_, min_area_);
     }
 
     void imageCb(const sensor_msgs::ImageConstPtr& msg) {
-        cv_bridge::CvImagePtr cv_ptr;
-        try {
-            cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
-        } catch (cv_bridge::Exception& e) {
-            ROS_ERROR("cv_bridge exception: %s", e.what());
-            return;
+        cv_bridge::CvImagePtr image;
+        try { image = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8); }
+        catch (const cv_bridge::Exception& error) {
+            ROS_ERROR_THROTTLE(1.0, "图像转换失败: %s", error.what()); return;
         }
-
+        if (image->image.empty()) return;
         cv::Mat hsv, mask;
-        cv::cvtColor(cv_ptr->image, hsv, cv::COLOR_BGR2HSV);
+        cv::cvtColor(image->image, hsv, cv::COLOR_BGR2HSV);
         cv::inRange(hsv, cv::Scalar(low_h_, low_s_, low_v_), cv::Scalar(high_h_, high_s_, high_v_), mask);
-
-        // 形态学开闭运算降噪
-        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(morph_kernel_, morph_kernel_));
-        cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);  // 去除白噪点
-        cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel); // 填补蓝色区域内的黑洞
-
-        // 先找轮廓，取最大轮廓后再算质心，保证红点一定在绿框内
+        cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel_);
+        cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, kernel_);
         std::vector<std::vector<cv::Point>> contours;
         cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-        if (!contours.empty()) {
-            double max_area = 0;
-            int max_idx = 0;
-            for (size_t i = 0; i < contours.size(); i++) {
-                double area = cv::contourArea(contours[i]);
-                if (area > max_area) {
-                    max_area = area;
-                    max_idx = i;
-                }
-            }
-
-            // 只对最大轮廓计算质心（用图像矩），避免噪点拉偏质心
-            cv::Moments m = cv::moments(contours[max_idx]);
-            if (m.m00 > min_area_) {
-                double center_x = m.m10 / m.m00;
-                double center_y = m.m01 / m.m00;
-
-                geometry_msgs::Point p;
-                p.x = center_x / cv_ptr->image.cols; // 归一化 x (0~1)，0.5 代表中心
-                p.y = center_y / cv_ptr->image.rows; // 归一化 y (0~1)
-                p.z = m.m00 / (cv_ptr->image.cols * cv_ptr->image.rows); // 面积占比给测距
-                target_pub_.publish(p);
-
-                // 绿框：最大轮廓的外接矩形
-                cv::Rect bounding_rect = cv::boundingRect(contours[max_idx]);
-                cv::rectangle(cv_ptr->image, bounding_rect, cv::Scalar(0, 255, 0), 2);
-                // 红点：同一轮廓的质心，保证在绿框内
-                cv::circle(cv_ptr->image, cv::Point(center_x, center_y), 5, cv::Scalar(0, 0, 255), -1);
-            }
+        double max_area = 0.0;
+        size_t max_index = 0;
+        for (size_t i = 0; i < contours.size(); ++i) {
+            double area = cv::contourArea(contours[i]);
+            if (area > max_area) { max_area = area; max_index = i; }
         }
-        
-        // 发布调试图像
-        debug_pub_.publish(cv_ptr->toImageMsg());
+        if (max_area > min_area_) {
+            const cv::Moments moments = cv::moments(contours[max_index]);
+            double x = moments.m10 / moments.m00, y = moments.m01 / moments.m00;
+            geometry_msgs::Vector3Stamped target;
+            target.header = msg->header;  // 源采集时间不可替换成检测/重发时间。
+            target.vector.x = x / image->image.cols;
+            target.vector.y = y / image->image.rows;
+            target.vector.z = moments.m00 / (image->image.cols * image->image.rows);
+            target_pub_.publish(target);
+            geometry_msgs::Point legacy;
+            legacy.x = target.vector.x; legacy.y = target.vector.y; legacy.z = target.vector.z;
+            legacy_pub_.publish(legacy);
+            cv::rectangle(image->image, cv::boundingRect(contours[max_index]), cv::Scalar(0, 255, 0), 2);
+            cv::circle(image->image, cv::Point(x, y), 5, cv::Scalar(0, 0, 255), -1);
+        }
+        // 保持原绿框/红质心调试图及源图像 header；压缩由 image_transport 提供。
+        debug_pub_.publish(image->toImageMsg());
     }
-
 private:
-    ros::NodeHandle nh_;
+    ros::NodeHandle nh_, private_nh_;
     image_transport::ImageTransport it_;
     image_transport::Subscriber image_sub_;
-    ros::Publisher target_pub_;
+    ros::Publisher legacy_pub_, target_pub_;
     image_transport::Publisher debug_pub_;
+    cv::Mat kernel_;
     int low_h_, high_h_, low_s_, high_s_, low_v_, high_v_, min_area_, morph_kernel_;
 };
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "blue_detector_node");
-    BlueDetector bd;
-    ros::spin();
+    try { BlueDetector detector; ros::spin(); }
+    catch (const std::exception& error) { ROS_FATAL("%s", error.what()); return 1; }
     return 0;
 }

@@ -1,0 +1,34 @@
+<launch>
+    <!-- 导航测试入口：硬件 + Cartographer 纯定位 + move_base
+         不启动视觉和决策状态机，用 RViz 2D Nav Goal 手动测试导航
+         与 bringup_localization.launch 共用同一套 move_base 参数 -->
+
+    <!-- 允许通过终端传参 pbstream:=/path/to/your.pbstream -->
+    <arg name="pbstream" default="$(find robot_slam)/map/map.pbstream" />
+
+    <!-- 1. 启动所有底层硬件和TF（含雷达、摄像头、手柄遥控、激光安全避障） -->
+     <include file="$(find robot_bringup)/launch/bringup.launch">
+          <arg name="start_joystick" value="false" />
+     </include>
+
+    <!-- 2. 启动 Cartographer 纯定位（加载已建图 pbstream，原点=建图起始点） -->
+    <include file="$(find robot_slam)/launch/localization.launch">
+        <arg name="pbstream" value="$(arg pbstream)" />
+    </include>
+
+    <!-- 3. 导航 move_base（TEB，输出 /cmd_vel_nav） -->
+    <include file="$(find navigation)/launch/move_base.launch" />
+
+    <!-- 不启动 vision.launch 和 race.launch。
+         move_base 输出到 /cmd_vel_nav，经续发节点转为统一自动输入 /cmd_vel_auto，
+         再由仲裁与激光安全层产生最终 /cmd_vel。 -->
+
+    <!-- 4. 速度续发节点：仅在真实上游速度 0.5s 内新鲜时输出 TwistStamped。
+         20Hz 平滑上游控制周期抖动；不把旧日志中的底盘看门狗假设作为原因。 -->
+    <node pkg="robot_bringup" type="cmd_vel_repeat_node.py" name="cmd_vel_repeat" output="screen">
+        <param name="input_topic" value="/cmd_vel_nav" />
+        <param name="output_topic" value="/cmd_vel_auto" />
+        <param name="rate" value="20.0" />
+        <param name="max_hold" value="0.5" />
+    </node>
+</launch>
