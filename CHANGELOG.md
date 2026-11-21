@@ -1,5 +1,74 @@
 # 更新日志 (Changelog)
 
+[2026-11-21 P1] 修复"识别到红/蓝纸后立刻停死不动"（视觉 FAULT 终态锁死）
+
+    现象：终点前检测到纸 -> 状态机进 VISUAL -> 约 50ms 内跳 FAULT -> 车永久静止，
+          必须 /race/reset 才能恢复；表现为"前往终点的阶段消失了"。
+
+    根因链（代码级确认）：
+        1. visual_servo step(): if (!wall.valid) { if (!allow_area_fallback) return stop("FAULT"); }
+           vision.launch 里 allow_area_fallback=false。
+           wall.valid 要求同时满足 min_points>=8 / min_width>=0.25 / max_rmse<=0.02 /
+           |yaw|<=0.70rad。侧向发现纸时车头与白板法向夹角大 -> 直接被 max_yaw 拒。
+        2. 状态机 VISUAL: if (vision_status_=="FAULT") setState(FAULT)
+           而 tick() 里 case State::FAULT 只 stop()，除 /race/reset 无出口 -> 死锁。
+        3. 隐藏 bug：setState(VISUAL) 只清了 vision_status_recv_time_/stamp_，
+           没清 vision_status_ 字符串；而 FAULT 判定不看新鲜度。
+           一旦历史上出现过 FAULT，之后每次进 VISUAL 的第一 tick 就立刻再判 FAULT，
+           visual_grace_timeout 宽限期也进不去（宽限分支要求 vision_status_!="FAULT"），
+           因此 search_max_attempts 形同虚设。
+
+    P1-1 decision/src/race_state_machine_node.cpp
+        * 视觉 FAULT 不再进终态：与 LOST 同路径回 SEARCHING 重搜，
+          只有 search_attempts_ 真正耗尽才 setState(FAULT)。
+    P1-2 同上
+        * setState(VISUAL) 增加 vision_status_.clear() + 清 wall_valid_/wall_distance_。
+        * 所有视觉状态判定都先经 status_fresh 判定，旧数据不再参与本轮决策。
+    P1-3 同上 + race.launch
+        * visionStatusCb 解析 wall_valid / wall_distance_m 诊断值。
+        * 新增 visual_max_time(25s) / visual_standoff(0.45) / visual_park_window(0.15)：
+          VISUAL 超时后，仅当"目标新鲜 + 墙面有效 + 距离已在停车区间"才判 FINISHED，
+          否则回 SEARCHING 重试。避免"停在半路也宣告成功"，也避免僵死。
+    P1-4 vision_control/launch/vision.launch
+        * standoff_distance 0.30 -> 0.45：0.30 时相机(车心前方 0.164m)离墙仅 0.136m，
+          纸左右被画面切掉 -> 横向质心算歪 -> 永远对不准。0.45 -> 相机离墙 0.286m，
+          车心距 80x80 区域中心 0.05m，全车进入余量 0.175m。
+        * distance_tolerance 0.015 -> 0.03：原值比墙面拟合噪声 wall_max_rmse(0.020) 还小，
+          数学上不可能稳定达成。
+        * center_tolerance 0.025 -> 0.06；yaw_tolerance 0.04 -> 0.10；stable_frames 5 -> 3。
+        * wall_max_yaw 0.70 -> 1.00：侧向发现纸时不再被直接拒绝（这是"侧边看到纸"的那一半原因）。
+        * wall_front_sector 0.50 -> 0.70：0.45m 处 ±28.6° 只覆盖 ±0.25m，点数可能不够。
+        * allow_area_fallback false -> true：墙拟合失败退化为保守接近，而非立刻 FAULT。
+    P1-5 decision/launch/race.launch
+        * search_max_time 20 -> 35：0.20rad/s*20s=4.0rad≈229°，转不满一圈，
+          纸在车后侧永远搜不到；35s -> 7.0rad > 360°。
+        * search_max_attempts 2 -> 5：2 次容易被一次抖动耗光直接进终态。
+
+    编译验证：g++ -fsyntax-only -std=c++14 通过（仅剩原有缩进警告）；三个 launch XML 解析通过。
+              catkin_make 在本机被 miniconda python3.14 污染（缺少 empy），属既有环境问题，
+              树莓派上按原流程编译即可。
+
+    已知局限（P2 再解决）：
+        * allow_area_fallback 的降级路径永不宣告 REACHED（纸在 0.45m 处约占画面 80%，
+          远大于 target_area 0.30），只保证不立刻 FAULT，不保证停准。
+        * wall_max_yaw 放宽到 57° 只让"侧向发现纸"不被拒；真正的
+          "先原地转正再横移" 仍需 P2。
+        * standoff 0.45 是几何推算值，需现场用 /rgb/blue_target_debug_img 确认
+          纸左右两边是否完整在画面内；若仍贴边则改 0.50（不要超过 0.60，
+          那里车尾只剩 0.025m 余量）。
+
+    现场排查：
+        * rostopic echo /race/state            是否还会永久停在 FAULT
+        * rostopic echo /visual_servo/status   wall_valid / wall_distance_m / wall_yaw_rad
+        * rostopic echo /safety/reason         若"车体扫掠或制动空间受限" -> B 点贴墙太近，车转不动
+        * grep "比赛状态 ->" ~/.ros/log/latest/rosout.log | tail
+
+    回退：
+        git checkout -- src/decision/src/race_state_machine_node.cpp \
+                        src/decision/launch/race.launch \
+                        src/vision_control/launch/vision.launch
+
+
 [2026-11-21 修复] B 键保存失败（锚点容差过严）+ 建图会话版本识别错误
 
     现象：新建图后按多次 B 键，重启 localization 车不动，状态机停在 WAIT_READY

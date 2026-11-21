@@ -104,6 +104,19 @@ class RaceTest(unittest.TestCase):
         self.assertTrue(response.success); self.wait_state("NAVIGATING")
         self.assertGreater(self.world.goals, before)
 
+    def test_03_visual_fault_retries_instead_of_deadlock(self):
+        """P1-1: 视觉报 FAULT 不得进终态死锁，必须回 SEARCHING 重搜。"""
+        rospy.ServiceProxy("/race/reset", Trigger)(); self.world.point(); self.wait_state("NAVIGATING")
+        self.world.succeed.set(); self.wait_state("SEARCHING")
+        end = time.time()+.7
+        while time.time()<end: self.world.vision("TRACKING"); time.sleep(.05)
+        self.wait_state("VISUAL")
+        # 持续发 FAULT，直到状态机应主动退回 SEARCHING。
+        end = time.time()+1.5
+        while time.time()<end and self.state == "VISUAL":
+            self.world.vision("FAULT"); time.sleep(.05)
+        self.assertEqual(self.state, "SEARCHING", "视觉 FAULT 后应回搜索重试，而不是停在 VISUAL 或 FAULT")
+
 
 if __name__ == "__main__":
     unittest.main()

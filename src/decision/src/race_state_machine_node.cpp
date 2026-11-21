@@ -40,6 +40,12 @@ class RaceStateMachine {
     pnh_.param("reached_stable_time", reached_stable_time_, 0.8);
     // 进入 VISUAL 后等待视觉首帧状态的宽限期，避免"状态未就绪"被误判为目标丢失。
     pnh_.param("visual_grace_timeout", visual_grace_timeout_, 1.0);
+    // P1-3: VISUAL 稳态判据久不成立时的兜底停车。
+    // visual_standoff 必须与 vision.launch 的 standoff_distance 保持一致，
+    // 否则兜底放行的距离与实际停车目标不符。
+    pnh_.param("visual_max_time", visual_max_time_, 25.0);
+    pnh_.param("visual_standoff", visual_standoff_, 0.45);
+    pnh_.param("visual_park_window", visual_park_window_, 0.15);
 
     waypoint_sub_ = nh_.subscribe("/vision_start_point", 1, &RaceStateMachine::waypointCb, this);
     nav_vel_sub_ = nh_.subscribe("/cmd_vel_nav", 5, &RaceStateMachine::navVelCb, this);
@@ -93,6 +99,17 @@ class RaceStateMachine {
     vision_status_ = msg->status[0].message;
     vision_status_stamp_ = msg->header.stamp;
     vision_status_recv_time_ = ros::Time::now();
+    // P1-3: 解析墙面诊断值，供"超时但已到达停车区附近"的兜底判定。
+    // 缺失或不可解析时一律当作无效，宁可回重搜也不误报到达。
+    wall_valid_ = false; wall_distance_ = 0.0;
+    for (const auto& kv : msg->status[0].values) {
+      if (kv.key == "wall_valid") {
+        wall_valid_ = (kv.value == "1" || kv.value == "1.000000" || kv.value == "true");
+      } else if (kv.key == "wall_distance_m") {
+        try { wall_distance_ = std::stod(kv.value); }
+        catch (const std::exception&) { wall_distance_ = 0.0; wall_valid_ = false; }
+      }
+    }
     if (vision_status_ == "REACHED") { if (reached_since_.isZero()) reached_since_ = ros::Time::now(); }
     else reached_since_ = ros::Time();
   }
@@ -152,6 +169,14 @@ class RaceStateMachine {
     state_ = next; publishState(); ROS_INFO("比赛状态 -> %s：%s", stateName(), reason.c_str());
     if (next == State::VISUAL) {
       visual_entered_ = ros::Time::now();
+      // P1-2: 字符串本身也必须清空。只清时间戳不够——FAULT 判定原先不看新鲜度，
+      // 上一轮残留的 "FAULT" 会让每次重进 VISUAL 的第一个 tick 立刻再判 FAULT，
+      // 连 visual_grace_timeout 都进不去，重搜次数形同虚设。
+      vision_status_.clear();
+      wall_valid_ = false; wall_distance_ = 0.0;
+      // 上一轮若短暂出现过 REACHED，reached_since_ 会残留非零值，使 visual_grace 恒为 false，
+      // 新一进 VISUAL 就要求状态已新鲜。这里一并清零，保证每次进入都享有宽限期。
+      reached_since_ = ros::Time();
       // 进入视觉前清空上一次的状态/速度新鲜度，避免用旧数据判定 LOST。
       vision_status_recv_time_ = ros::Time();
       vision_status_stamp_ = ros::Time();
@@ -236,13 +261,36 @@ class RaceStateMachine {
         if (!status_fresh && visual_grace && targetFresh() && vision_status_ != "FAULT") {
           stop(); break;
         }
-        if (!targetFresh() || !status_fresh || vision_status_ == "LOST") {
-          stop(); if (search_attempts_ < search_max_attempts_) beginSearch(); else setState(State::FAULT, "视觉目标丢失且重搜次数已用尽"); break;
+        // P1-1: 视觉 FAULT 不再直接终结比赛。原实现 setState(FAULT) 后 tick 只 stop()，
+        // 除 /race/reset 无出口，表现为"识别到纸后 50ms 内停死、再也不动"。
+        // 现在与 LOST 同路径：回 SEARCHING 重搜，只有重搜次数真正耗尽才进终态。
+        if (!targetFresh() || !status_fresh || vision_status_ == "LOST" || vision_status_ == "FAULT") {
+          const std::string reason = !targetFresh() ? "视觉目标丢失"
+              : (!status_fresh ? "视觉状态不新鲜" : ("视觉报告 " + vision_status_));
+          stop();
+          if (search_attempts_ < search_max_attempts_) { ROS_WARN("VISUAL 退出（%s），回搜索重试", reason.c_str()); beginSearch(); }
+          else setState(State::FAULT, reason + " 且重搜次数已用尽");
+          break;
         }
-        if (vision_status_ == "FAULT") { stop(); setState(State::FAULT, "视觉伺服报告 FAULT"); break; }
         if (vision_status_ == "REACHED" && !reached_since_.isZero() &&
             (ros::Time::now() - reached_since_).toSec() >= reached_stable_time_) {
           stop(); setState(State::FINISHED, "视觉 REACHED 持续稳定"); break;
+        }
+        // P1-3: 稳态判据久不成立时的兜底。只有"目标仍新鲜 + 墙面有效 +
+        // 墙面距离已在停车区间内"才承认到达，避免车停在半路也宣告成功。
+        if (visual_max_time_ > 0.0 && (ros::Time::now() - visual_entered_).toSec() >= visual_max_time_) {
+          if (targetFresh() && wall_valid_ && wall_distance_ > 0.0 &&
+              std::abs(wall_distance_ - visual_standoff_) <= visual_park_window_) {
+            stop();
+            ROS_WARN("VISUAL 超时 %.1fs，但墙面距离 %.3fm 已在停车区间 [%.3f, %.3f]，判定到达",
+                     visual_max_time_, wall_distance_, visual_standoff_ - visual_park_window_,
+                     visual_standoff_ + visual_park_window_);
+            setState(State::FINISHED, "视觉超时兜底：已在停车区间内"); break;
+          }
+          stop();
+          if (search_attempts_ < search_max_attempts_) { ROS_WARN("VISUAL 超时 %.1fs 且未进入停车区间，回搜索重试", visual_max_time_); beginSearch(); }
+          else setState(State::FAULT, "视觉超时且未进入停车区间，重搜次数已用尽");
+          break;
         }
         if (fresh(vision_vel_recv_time_, vision_cmd_timeout_) && fresh(vision_vel_.header.stamp, target_timeout_)) publishAuto(vision_vel_.twist);
         else stop();
@@ -290,11 +338,15 @@ class RaceStateMachine {
   ros::Time nav_vel_time_, target_time_, target_first_time_, vision_vel_recv_time_, vision_status_stamp_, vision_status_recv_time_;
   ros::Time scan_time_, control_ready_time_, manual_time_, safety_ready_time_, localization_ready_time_, goal_sent_time_, search_started_, reached_since_;
   std::string vision_status_;
+  // P1-3: 视觉状态里的墙面诊断值，用于超时兜底判定是否已在停车区间。
+  bool wall_valid_{false};
+  double wall_distance_{0.0};
   bool waypoint_valid_{false}, control_ready_{false}, manual_active_{false}, manual_latched_{false}, safety_ready_{false}, localization_ready_{false}, auto_started_{false};
   bool auto_start_, allow_visual_during_navigation_;
   double readiness_timeout_, tf_timeout_, nav_cmd_timeout_, vision_cmd_timeout_, target_timeout_, goal_timeout_;
   double search_speed_, search_max_time_, search_max_angle_, target_stable_time_, reached_stable_time_;
   double visual_grace_timeout_;
+  double visual_max_time_, visual_standoff_, visual_park_window_;
   ros::Time visual_entered_;
   int search_max_attempts_, search_attempts_{0};
   double search_accum_angle_{0.0}, last_search_yaw_{0.0};

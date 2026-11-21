@@ -2,7 +2,10 @@
     <!-- 临时改为红色终点标识：检测和调试画面；控制输出必须经过比赛仲裁与统一安全层。 -->
     <arg name="run_servo" default="true" />
     <arg name="image_topic" default="/usb_cam/image_raw" />
-    <arg name="standoff_distance" default="0.30" />
+    <!-- P1-4: 0.30 时相机(车心前方 0.164m)离墙仅 0.136m，纸左右被画面切掉，
+         横向质心算歪 -> 永远对不准。0.45 -> 相机离墙 0.286m，纸完整可见；
+         车心距 80x80 区域中心仅 0.05m，全车进入余量 0.175m。 -->
+    <arg name="standoff_distance" default="0.45" />
     <node pkg="vision_control" type="blue_detector_node" name="blue_detector" output="screen">
         <param name="image_topic" value="$(arg image_topic)" />
         <rosparam>
@@ -32,27 +35,36 @@
             accel_x: 0.15
             accel_y: 0.20
             accel_yaw: 0.40
-            distance_tolerance: 0.015
-            center_tolerance: 0.025
-            yaw_tolerance: 0.04
+            <!-- P1-4: 0.015 比墙面拟合噪声 wall_max_rmse(0.020) 还小，数学上不可能稳定达成。 -->
+            distance_tolerance: 0.03
+            <!-- P1-4: 320px 宽下 0.025 约等于 8mm 横向精度，开环视觉做不到；
+                 实际允许横向误差有 0.29m，放宽到 0.06。 -->
+            center_tolerance: 0.06
+            <!-- P1-4: 2.3° 太严，激光拟合墙面 yaw 本身有离散度。 -->
+            yaw_tolerance: 0.10
             stable_time: 0.8
-            stable_frames: 5
+            <!-- P1-4: 与 stable_time 叠加已足够抗抖，5 帧在 15fps 下要 0.33s。 -->
+            stable_frames: 3
             target_timeout: 0.3
             scan_timeout: 0.3
             publish_rate: 20.0
             base_frame: base_link
             scan_topic: /scan
-            wall_front_sector: 0.50
+            <!-- P1-4: ±28.6° 在 0.45m 处只覆盖 ±0.25m，白板靠边时点数不够；放宽到 ±40°。 -->
+            wall_front_sector: 0.70
             wall_max_range: 3.0
             wall_inlier_tolerance: 0.025
             wall_max_rmse: 0.020
             wall_min_width: 0.25
             wall_min_points: 8
             wall_min_inlier_ratio: 0.65
-            wall_max_yaw: 0.70
+            <!-- P1-4: 侧向发现纸时车头与白板法向有夹角，40° 门槛会直接拒掉并报 FAULT；
+                 放宽到 57°。 -->
+            wall_max_yaw: 1.00
             center_x: 0.5
             lateral_sign: 1.0
-            allow_area_fallback: false
+            <!-- P1-4: 墙面拟合失败时退化为保守接近，而不是立刻 FAULT 触发状态机死锁。 -->
+            allow_area_fallback: true
             target_area: 0.30
         </rosparam>
     </node>

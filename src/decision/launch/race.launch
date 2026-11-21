@@ -21,11 +21,19 @@
             target_timeout: 0.3
             goal_timeout: 120.0
             search_speed: 0.20
-            search_max_time: 20.0
+            <!-- P1-5: 0.20 rad/s * 20s = 4.0rad ≈ 229°，转不满一圈，纸在车后侧永远搜不到。
+                 35s -> 7.0rad > 360°，保证能扫满一圈。 -->
+            search_max_time: 35.0
             search_max_angle: 6.3
-            search_max_attempts: 2
+            <!-- P1-5: 2 次很容易被一次抖动耗光直接进终态，放宽到 5。 -->
+            search_max_attempts: 5
             target_stable_time: 0.4
             reached_stable_time: 0.8
+            <!-- P1-3: VISUAL 稳态判据久不成立时的兜底。
+                 visual_standoff 必须与 vision.launch 的 standoff_distance 一致。 -->
+            visual_max_time: 25.0
+            visual_standoff: 0.45
+            visual_park_window: 0.15
         </rosparam>
     </node>
 </launch>
